@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState , useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   Box,
@@ -34,6 +34,11 @@ import AssignmentIcon from "@mui/icons-material/Assignment";
 import CheckIcon from "@mui/icons-material/Check";
 import ClearIcon from "@mui/icons-material/Clear";
 import { useTheme } from "../ThemeContext";
+import { useAuth } from "../useAuth";
+import { io } from "socket.io-client";
+import ChatIcon from '@mui/icons-material/Chat';
+import Drawer from '@mui/material/Drawer';
+import ReplyIcon from '@mui/icons-material/Reply';
 
 // Add geometric/dot pattern background component inspired by Landing.jsx
 const DotPattern = ({ theme }) => (
@@ -54,6 +59,163 @@ const DotPattern = ({ theme }) => (
     }}
   />
 );
+
+function ProjectChatDrawer({ projectId, open, onClose }) {
+  const { user } = useAuth();
+  const { theme } = useTheme();
+  const [messages, setMessages] = useState([]);
+  const [input, setInput] = useState("");
+  const [replyTo, setReplyTo] = useState(null);
+  const socketRef = useRef(null);
+  const messagesEndRef = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    socketRef.current = io("http://localhost:5000");
+    socketRef.current.emit("joinProjectRoom", projectId);
+    const fetchHistory = async () => {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`http://localhost:5000/api/projects/${projectId}/chat`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setMessages(data);
+      }
+    };
+    fetchHistory();
+    socketRef.current.on("projectChatMessage", (msg) => {
+      setMessages((prev) => [...prev, msg]);
+    });
+    return () => {
+      socketRef.current.emit("leaveProjectRoom", projectId);
+      socketRef.current.disconnect();
+    };
+  }, [projectId, open]);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, open]);
+
+  const handleSend = (e) => {
+    e.preventDefault();
+    if (!input.trim()) return;
+    socketRef.current.emit("projectChatMessage", {
+      projectId,
+      senderId: user.id || user._id,
+      message: input,
+      replyTo: replyTo ? {
+        _id: replyTo._id,
+        senderName: replyTo.senderId?.name || 'You',
+        text: replyTo.message,
+      } : undefined,
+    });
+    setInput("");
+    setReplyTo(null);
+  };
+
+  return (
+    <Drawer anchor="right" open={open} onClose={onClose} PaperProps={{ sx: { width: 350, p: 0, bgcolor: theme === 'dark' ? '#232946' : '#fff' } }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', p: 2, borderBottom: '1px solid #eee', bgcolor: theme === 'dark' ? '#181823' : '#1976d2', color: theme === 'dark' ? '#fbbf24' : 'white' }}>
+        <Typography variant="h6" fontWeight={700}>Project Chat</Typography>
+        <IconButton onClick={onClose} sx={{ color: theme === 'dark' ? '#fbbf24' : 'white' }}><CloseIcon /></IconButton>
+      </Box>
+      <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%' }}>
+        <Box sx={{ flex: 1, overflowY: 'auto', p: 2, bgcolor: theme === 'dark' ? '#181823' : '#f9f9f9', minHeight: 0 }}>
+          {messages.map((msg) => {
+            const isCurrentUser = msg.senderId?._id === (user.id || user._id);
+            const isAdmin = msg.senderId?.role === 'admin';
+            return (
+              <Box
+                key={msg._id}
+                sx={{
+                  mb: 2,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: isCurrentUser ? 'flex-end' : 'flex-start',
+                  position: 'relative',
+                }}
+              >
+                {/* If this message is a reply, show the quoted message above */}
+                {msg.replyTo && (
+                  <Box sx={{
+                    bgcolor: theme === 'dark' ? '#393e46' : '#f5f5f5',
+                    borderLeft: '3px solid #1976d2',
+                    px: 1.5, py: 0.5, mb: 0.5, borderRadius: 1, maxWidth: '75%',
+                  }}>
+                    <Typography variant="caption" fontWeight={700} sx={{ color: '#1976d2' }}>{msg.replyTo.senderName}</Typography>
+                    <Typography variant="caption" sx={{ color: '#232323', fontStyle: 'italic' }}>
+                      {msg.replyTo.text.length > 60 ? msg.replyTo.text.slice(0, 60) + '…' : msg.replyTo.text}
+                    </Typography>
+                  </Box>
+                )}
+                <Box
+                  sx={{
+                    bgcolor: isAdmin
+                      ? (theme === 'dark' ? '#fffde7' : '#fff9c4')
+                      : isCurrentUser
+                      ? (theme === 'dark' ? '#6366f1' : '#1976d2')
+                      : (theme === 'dark' ? '#393e46' : '#e0e0e0'),
+                    color: isCurrentUser
+                      ? 'white'
+                      : isAdmin
+                      ? (theme === 'dark' ? '#232946' : '#232946')
+                      : (theme === 'dark' ? '#fbbf24' : '#232946'),
+                    px: 2,
+                    py: 1,
+                    borderRadius: 2,
+                    maxWidth: '80%',
+                    border: isAdmin ? '2px solid #ffd600' : 'none',
+                    boxShadow: isAdmin ? '0 2px 8px #ffe082' : undefined,
+                    position: 'relative',
+                  }}
+                >
+                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
+                    <Typography variant="body2" fontWeight={600} sx={{ mr: 1, color: isAdmin ? (theme === 'dark' ? '#b26a00' : '#b26a00') : undefined }}>
+                      {msg.senderId?.name || 'You'}
+                    </Typography>
+                    {isAdmin && (
+                      <AdminPanelSettingsIcon fontSize="small" sx={{ color: '#ffd600', ml: 0.5 }} />
+                    )}
+                  </Box>
+                  <Typography variant="body1" sx={{ wordBreak: 'break-word', color: '#232323' }}>{msg.message}</Typography>
+                  <Typography variant="caption" sx={{ color: isCurrentUser ? (theme === 'dark' ? '#ffe082' : '#e0e0e0') : '#888', float: 'right', display: 'block', mt: 0.5 }}>
+                    {msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString() : ''}
+                  </Typography>
+                  {/* Reply icon */}
+                  <IconButton size="small" sx={{ position: 'absolute', top: 2, right: isCurrentUser ? '100%' : '-36px', color: '#1976d2' }} onClick={() => setReplyTo(msg)}>
+                    <ReplyIcon fontSize="small" />
+                  </IconButton>
+                </Box>
+              </Box>
+            );
+          })}
+          <div ref={messagesEndRef} />
+        </Box>
+        {/* Reply preview above input */}
+        {replyTo && (
+          <Box sx={{ display: 'flex', alignItems: 'center', bgcolor: theme === 'dark' ? '#393e46' : '#f5f5f5', borderLeft: '3px solid #1976d2', px: 1.5, py: 0.5, mb: 1, borderRadius: 1, mx: 2 }}>
+            <Typography variant="caption" fontWeight={700} sx={{ color: '#1976d2', mr: 1 }}>{replyTo.senderId?.name || 'You'}</Typography>
+            <Typography variant="caption" sx={{ color: '#232323', fontStyle: 'italic', flex: 1 }}>
+              {replyTo.message.length > 60 ? replyTo.message.slice(0, 60) + '…' : replyTo.message}
+            </Typography>
+            <IconButton size="small" onClick={() => setReplyTo(null)} sx={{ ml: 1, color: '#1976d2' }}><CloseIcon fontSize="small" /></IconButton>
+          </Box>
+        )}
+        <Box component="form" onSubmit={handleSend} sx={{ display: 'flex', gap: 1, p: 2, borderTop: '1px solid #eee', bgcolor: theme === 'dark' ? '#232946' : '#fff' }}>
+          <input
+            type="text"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder="Type a message..."
+            style={{ flex: 1, padding: 8, borderRadius: 4, border: '1px solid #ccc', background: theme === 'dark' ? '#181823' : '#fff', color: theme === 'dark' ? '#fbbf24' : '#232946' }}
+          />
+          <button type="submit" style={{ padding: '8px 16px', borderRadius: 4, background: theme === 'dark' ? '#6366f1' : '#1976d2', color: 'white', border: 'none' }}>Send</button>
+        </Box>
+      </Box>
+    </Drawer>
+  );
+}
 
 export default function ProjectPage() {
   const { id } = useParams();
@@ -270,6 +432,8 @@ export default function ProjectPage() {
     fetchProject();
   };
 
+  const [chatDrawerOpen, setChatDrawerOpen] = useState(false);
+
   if (loading)
     return (
       <Box p={4} textAlign="center">
@@ -340,6 +504,23 @@ export default function ProjectPage() {
       >
         {theme === "dark" ? "🌞" : "🌙"}
       </Button>
+      {/* Floating chat icon button */}
+      <Tooltip title="Chat">
+        <IconButton
+          onClick={() => setChatDrawerOpen(true)}
+          sx={{
+            position: "fixed",
+            bottom: 80,
+            right: 32,
+            zIndex: 10,
+            bgcolor: theme === "dark" ? "#232946" : "#1976d2",
+            color: "white",
+            "&:hover": { bgcolor: theme === "dark" ? "#393e46" : "#1565c0" },
+          }}
+        >
+          <ChatIcon />
+        </IconButton>
+      </Tooltip>
       <Box
         sx={{
           position: "relative",
@@ -962,6 +1143,7 @@ export default function ProjectPage() {
             </Paper>
           )}
       </Box>
+      <ProjectChatDrawer projectId={project._id} open={chatDrawerOpen} onClose={() => setChatDrawerOpen(false)} />
     </Box>
   );
 }

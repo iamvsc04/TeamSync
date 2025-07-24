@@ -2,6 +2,7 @@ const express = require("express");
 const Project = require("../models/Project");
 const User = require("../models/User");
 const jwt = require("jsonwebtoken");
+const ChatMessage = require("../models/ChatMessage");
 
 const router = express.Router();
 
@@ -273,12 +274,36 @@ router.get("/my-join-requests", authMiddleware, async (req, res) => {
 // Member: Get all projects where the user is a member
 router.get("/member-projects", authMiddleware, async (req, res) => {
   try {
+    console.log('Fetching projects for user:', req.user.userId);
     const projects = await Project.find({ members: req.user.userId })
       .populate("members", "name email role")
       .sort({ createdAt: -1 });
+    console.log('Projects found:', projects.map(p => ({ id: p._id, name: p.name })));
     res.json(projects);
   } catch (err) {
     res.status(500).json({ message: "Server error." });
+  }
+});
+
+// Get chat history for a project
+router.get("/:projectId/chat", authMiddleware, async (req, res) => {
+  const { projectId } = req.params;
+  try {
+    const project = await Project.findById(projectId);
+    if (!project) return res.status(404).json({ message: "Project not found" });
+    // Only members or admins can view chat
+    if (
+      req.user.role !== "admin" &&
+      !project.members.map(m => String(m)).includes(req.user.userId)
+    ) {
+      return res.status(403).json({ message: "Not authorized to view chat" });
+    }
+    const messages = await ChatMessage.find({ projectId })
+      .sort({ timestamp: 1 })
+      .populate("senderId", "name email role");
+    res.json(messages);
+  } catch (err) {
+    res.status(500).json({ message: "Server error" });
   }
 });
 
