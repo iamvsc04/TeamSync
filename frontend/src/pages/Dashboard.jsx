@@ -12,10 +12,14 @@ import {
   Box,
   Typography,
   Paper,
+  Badge,
+  IconButton,
 } from "@mui/material";
 import Snackbar from "@mui/material/Snackbar";
 import MuiAlert from "@mui/material/Alert";
 import { useTheme } from "../ThemeContext";
+import NotificationCenter from "../components/NotificationCenter";
+import NotificationsIcon from '@mui/icons-material/Notifications';
 
 // Placeholder functions for fetching data (to be implemented)
 const fetchProjects = async (role) => [];
@@ -28,6 +32,7 @@ function MemberDashboardContent({
   notifications,
   user,
   onJoinProject, // new prop
+  fetchProjects, // pass fetchProjects as a prop
 }) {
   const { theme } = useTheme();
   const cardBg =
@@ -137,7 +142,13 @@ function MemberDashboardContent({
     );
     if (res.ok) {
       const data = await res.json();
-      setJoinRequests(data);
+      // Only show pending requests in the dashboard
+      const pendingRequests = data.filter(req => req.status === "pending");
+      setJoinRequests(pendingRequests);
+      // If any request is now approved, refresh projects
+      if (data.some((req) => req.status === "approved")) {
+        if (fetchProjects) await fetchProjects();
+      }
     }
   };
   useEffect(() => {
@@ -152,23 +163,23 @@ function MemberDashboardContent({
           (r) => r.projectId === req.projectId
         );
         if (prev && prev.status !== req.status && req.status !== "pending") {
-          // Add notification
-          setNotifications((prevNotifs) => [
-            {
-              id: `${req.projectId}-${req.status}`,
-              message: `Your join request to ${req.projectName} was ${
-                req.status === "approved" ? "approved" : "rejected"
-              }.`,
-              type: req.status === "approved" ? "success" : "error",
-              date: new Date().toISOString(),
-            },
-            ...prevNotifs,
-          ]);
+          // Show notification
+          setSnackbarMsg(`Your join request to ${req.projectName} was ${
+            req.status === "approved" ? "approved" : "rejected"
+          }.`);
+          setSnackbarOpen(true);
+          
+          // If approved, refresh projects
+          if (req.status === "approved") {
+            setTimeout(() => {
+              if (fetchProjects) fetchProjects();
+            }, 1000);
+          }
         }
       });
     }
     prevRequestsRef.current = joinRequests;
-  }, [joinRequests]);
+  }, [joinRequests, fetchProjects]);
 
   const handleJoinProject = async () => {
     setJoinLoading(true);
@@ -190,15 +201,28 @@ function MemberDashboardContent({
       const data = await res.json();
       if (!res.ok)
         throw new Error(data.message || "Failed to send join request");
+      
       setJoinSuccess("Join request sent! Awaiting admin approval.");
+      setSnackbarMsg("Join request sent successfully! Awaiting admin approval.");
+      setSnackbarOpen(true);
       setJoinCode("");
       setJoinModalOpen(false);
-      if (onJoinProject) onJoinProject();
+      
+      // Refresh join requests
+      await fetchJoinRequests();
+      
+      if (onJoinProject) await onJoinProject();
+      if (fetchProjects) await fetchProjects();
     } catch (err) {
       setJoinError(err.message);
     } finally {
       setJoinLoading(false);
     }
+  };
+
+  const handleViewCurrentProjects = async () => {
+    if (fetchProjects) await fetchProjects();
+    setCurrentProjectsOpen(true);
   };
 
   return (
@@ -242,32 +266,30 @@ function MemberDashboardContent({
         )}
       </Box>
       {/* Join Project Button and Refresh */}
-      <Button
-        variant="contained"
-        color="primary"
-        sx={{ mb: 2 }}
-        onClick={() => setJoinModalOpen(true)}
-      >
-        Join Project
-      </Button>
-      <Button
-        variant="outlined"
-        color="secondary"
-        sx={{ mb: 2, ml: 2 }}
-        onClick={fetchJoinRequests}
-      >
-        Refresh
-      </Button>
-      {/* View Current Projects Button */}
-      <Button
-        variant="outlined"
-        color="primary"
-        sx={{ mb: 2, mr: 2 }}
-        onClick={() => setCurrentProjectsOpen(true)}
-      >
-        View Current Projects
-      </Button>
-      {/* Current Projects Modal */}
+      <Box display="flex" gap={2} mb={2}>
+        <Button
+          variant="contained"
+          color="primary"
+          onClick={() => setJoinModalOpen(true)}
+        >
+          Join Project
+        </Button>
+        <Button
+          variant="outlined"
+          color="secondary"
+          onClick={fetchJoinRequests}
+        >
+          Refresh Requests
+        </Button>
+        <Button
+          variant="outlined"
+          color="primary"
+          onClick={handleViewCurrentProjects}
+        >
+          View My Projects
+        </Button>
+      </Box>
+      {/* View Current Projects Modal */}
       <Dialog
         open={currentProjectsOpen}
         onClose={() => setCurrentProjectsOpen(false)}
@@ -419,11 +441,14 @@ function MemberDashboardContent({
       </Dialog>
       {/* Your Join Requests Section */}
       <Box mb={3}>
-        <Typography variant="h6" fontWeight={700} mb={1}>
-          Your Join Requests
+        <Typography variant="h6" fontWeight={700} mb={1} sx={{ color: theme === 'dark' ? '#fff' : '#333' }}>
+          Your Pending Join Requests
+        </Typography>
+        <Typography variant="body2" sx={{ color: theme === 'dark' ? '#ccc' : '#666' }} mb={2}>
+          Check the notification center for updates on approved or rejected requests.
         </Typography>
         {joinRequests.length === 0 ? (
-          <Typography color="text.secondary">No join requests yet.</Typography>
+          <Typography sx={{ color: theme === 'dark' ? '#ccc' : '#666' }}>No pending join requests.</Typography>
         ) : (
           joinRequests.map((req) => (
             <Paper key={req.projectId} sx={{ p: 2, mb: 1, borderRadius: 2 }}>
@@ -433,20 +458,8 @@ function MemberDashboardContent({
                 justifyContent="space-between"
               >
                 <Typography fontWeight={600}>{req.projectName}</Typography>
-                <Typography
-                  color={
-                    req.status === "pending"
-                      ? "warning.main"
-                      : req.status === "approved"
-                      ? "success.main"
-                      : "error.main"
-                  }
-                >
-                  {req.status === "pending"
-                    ? "Waiting for admin to accept"
-                    : req.status === "approved"
-                    ? "Accepted by admin"
-                    : "Rejected by admin"}
+                <Typography color="warning.main">
+                  Waiting for admin to accept
                 </Typography>
               </Box>
             </Paper>
@@ -897,11 +910,16 @@ function AdminDashboardContent({
   user,
   theme,
   onProjectCreated,
+  fetchProjects,
 }) {
   const [modalOpen, setModalOpen] = useState(false);
   const [projectsModalOpen, setProjectsModalOpen] = useState(false);
-  const [selectedProject, setSelectedProject] = useState(null);
   const [joinRequestsModalOpen, setJoinRequestsModalOpen] = useState(false);
+  const [selectedProject, setSelectedProject] = useState(null);
+  const [joinRequests, setJoinRequests] = useState([]);
+  const [snackbarOpen, setSnackbarOpen] = useState(false);
+  const [snackbarMsg, setSnackbarMsg] = useState("");
+  const [snackbarSeverity, setSnackbarSeverity] = useState("success");
   const cardBg =
     theme === "dark"
       ? "linear-gradient(135deg, #232946 0%, #121629 100%)"
@@ -918,6 +936,76 @@ function AdminDashboardContent({
   const boxBg = theme === "dark" ? "#181823" : "white";
   const boxText = theme === "dark" ? "#e5e5e5" : "#333";
 
+  const fetchJoinRequests = async () => {
+    const token = localStorage.getItem("token");
+    try {
+      const res = await fetch("http://localhost:5000/api/projects/join-requests", {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setJoinRequests(data);
+      } else if (res.status === 403) {
+        // User is not admin, which is expected for some users
+        setJoinRequests([]);
+      } else {
+        console.error("Error fetching join requests:", res.status);
+      }
+    } catch (error) {
+      console.error("Error fetching join requests:", error);
+    }
+  };
+
+  const handleJoinRequestAction = async (projectId, userId, action) => {
+    const token = localStorage.getItem("token");
+    try {
+      const res = await fetch(`http://localhost:5000/api/projects/join-request/${projectId}/${userId}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ status: action }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.message || "Failed to update join request status");
+      }
+      
+      // Show success notification
+      setSnackbarMsg(`Join request ${action} successfully!`);
+      setSnackbarSeverity("success");
+      setSnackbarOpen(true);
+      
+      setJoinRequestsModalOpen(false);
+      // Refresh join requests and projects
+      await fetchJoinRequests();
+      if (fetchProjects) await fetchProjects();
+      // Refresh notifications to show the new notification
+      await fetchNotifications();
+      await fetchUnreadNotifications();
+    } catch (err) {
+      setSnackbarMsg(err.message);
+      setSnackbarSeverity("error");
+      setSnackbarOpen(true);
+    }
+  };
+
+  useEffect(() => {
+    fetchJoinRequests();
+  }, []);
+
+  const onViewJoinRequests = (project) => {
+    setSelectedProject(project);
+    setJoinRequestsModalOpen(true);
+  };
+
+  // Calculate total pending join requests
+  const totalPendingRequests = joinRequests.length;
+
   return (
     <>
       <CreateProjectModal
@@ -930,12 +1018,9 @@ function AdminDashboardContent({
         open={projectsModalOpen}
         onClose={() => setProjectsModalOpen(false)}
         projects={projects}
-        onViewJoinRequests={(project) => {
-          setSelectedProject(project);
-          setJoinRequestsModalOpen(true);
-        }}
+        onViewJoinRequests={onViewJoinRequests}
       />
-      {/* Join Requests Modal for selected project (to be implemented) */}
+      {/* Join Requests Modal for selected project */}
       <Dialog
         open={joinRequestsModalOpen}
         onClose={() => setJoinRequestsModalOpen(false)}
@@ -944,46 +1029,86 @@ function AdminDashboardContent({
       >
         <DialogTitle>Join Requests for {selectedProject?.name}</DialogTitle>
         <DialogContent>
-          {selectedProject?.joinRequests?.length === 0 ? (
+          {!selectedProject?.joinRequests || selectedProject.joinRequests.filter(req => req.status === "pending").length === 0 ? (
             <Typography color="text.secondary">
               No pending join requests for this project.
             </Typography>
           ) : (
-            selectedProject?.joinRequests?.map((req) => (
-              <Paper key={req._id} sx={{ p: 2, mb: 1, borderRadius: 2 }}>
-                <Box
-                  display="flex"
-                  alignItems="center"
-                  justifyContent="space-between"
-                >
-                  <Typography fontWeight={600}>{req.requesterName}</Typography>
-                  <Typography
-                    color={
-                      req.status === "pending"
-                        ? "warning.main"
-                        : req.status === "approved"
-                        ? "success.main"
-                        : "error.main"
-                    }
+            selectedProject.joinRequests
+              .filter(req => req.status === "pending")
+              .map((req) => (
+                <Paper key={req._id} sx={{ p: 2, mb: 1, borderRadius: 2 }}>
+                  <Box
+                    display="flex"
+                    alignItems="center"
+                    justifyContent="space-between"
                   >
-                    {req.status}
-                  </Typography>
-                </Box>
-                <Typography variant="body2" color="text.secondary">
-                  Requested on: {new Date(req.requestedAt).toLocaleDateString()}
-                </Typography>
-              </Paper>
-            ))
+                    <Box>
+                      <Typography fontWeight={600}>
+                        {req.user && req.user.name ? req.user.name : "Unknown User"}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        {req.user && req.user.email ? req.user.email : "No email"}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        Requested on: {new Date(req.requestedAt).toLocaleDateString()}
+                      </Typography>
+                    </Box>
+                    <Box display="flex" gap={1}>
+                      <Button
+                        size="small"
+                        color="success"
+                        variant="contained"
+                        onClick={() => handleJoinRequestAction(selectedProject._id, req.user._id || req.user, "approved")}
+                      >
+                        Approve
+                      </Button>
+                      <Button
+                        size="small"
+                        color="error"
+                        variant="outlined"
+                        onClick={() => handleJoinRequestAction(selectedProject._id, req.user._id || req.user, "rejected")}
+                      >
+                        Reject
+                      </Button>
+                    </Box>
+                  </Box>
+                </Paper>
+              ))
           )}
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setJoinRequestsModalOpen(false)}>Close</Button>
         </DialogActions>
       </Dialog>
+      <Snackbar
+        open={snackbarOpen}
+        autoHideDuration={4000}
+        onClose={() => setSnackbarOpen(false)}
+      >
+        <MuiAlert
+          elevation={6}
+          variant="filled"
+          onClose={() => setSnackbarOpen(false)}
+          severity={snackbarSeverity}
+        >
+          {snackbarMsg}
+        </MuiAlert>
+      </Snackbar>
       <div style={{ marginBottom: "30px" }}>
-        <h2 style={{ margin: "15px 0 0 0", fontSize: "32px", color: boxText }}>
-          Welcome back, {user?.name || "Admin"}!
-        </h2>
+        <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
+          <h2 style={{ margin: "15px 0 0 0", fontSize: "32px", color: boxText }}>
+            Welcome back, {user?.name || "Admin"}!
+          </h2>
+          {totalPendingRequests > 0 && (
+            <Chip
+              label={`${totalPendingRequests} Pending Join Request${totalPendingRequests > 1 ? 's' : ''}`}
+              color="warning"
+              variant="filled"
+              sx={{ fontSize: '14px', fontWeight: 'bold' }}
+            />
+          )}
+        </Box>
       </div>
       <div
         style={{
@@ -1236,21 +1361,23 @@ const TeamSyncDashboard = () => {
   const { user, role, setRole, logout } = useAuth();
   const navigate = useNavigate();
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
-  const [notificationMenuOpen, setNotificationMenuOpen] = useState(false);
   const [projects, setProjects] = useState([]);
   const [meetings, setMeetings] = useState([]);
   const [notifications, setNotifications] = useState([]);
   const { theme, toggleTheme } = useTheme();
+  const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "success" });
+  const [notificationCenterOpen, setNotificationCenterOpen] = useState(false);
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
 
-  useEffect(() => {
-    const fetchProjects = async () => {
-      const token = localStorage.getItem("token");
-      let url = "";
-      if (role === "admin") {
-        url = "http://localhost:5000/api/projects/mine";
-      } else {
-        url = "http://localhost:5000/api/projects/member-projects";
-      }
+  const fetchProjects = async () => {
+    const token = localStorage.getItem("token");
+    let url = "";
+    if (role === "admin") {
+      url = "http://localhost:5000/api/projects/mine";
+    } else {
+      url = "http://localhost:5000/api/projects/member-projects";
+    }
+    try {
       const res = await fetch(url, {
         headers: {
           "Content-Type": "application/json",
@@ -1260,12 +1387,49 @@ const TeamSyncDashboard = () => {
       if (res.ok) {
         const data = await res.json();
         setProjects(data);
+      } else {
+        console.error("Failed to fetch projects:", res.status);
       }
-    };
+    } catch (error) {
+      console.error("Error fetching projects:", error);
+    }
+  };
+
+  const fetchUnreadNotifications = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      const response = await fetch("http://localhost:5000/api/notifications/unread-count", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setUnreadNotifications(data.count);
+      }
+    } catch (err) {
+      console.error("Failed to fetch unread notifications:", err);
+    }
+  };
+
+  const fetchNotifications = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      const response = await fetch("http://localhost:5000/api/notifications", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setNotifications(data.notifications || []);
+      }
+    } catch (err) {
+      console.error("Failed to fetch notifications:", err);
+    }
+  };
+
+  useEffect(() => {
     fetchProjects();
-    fetchMeetings(role).then(setMeetings);
-    fetchNotifications(role).then(setNotifications);
-  }, [role]);
+    fetchUnreadNotifications();
+    fetchNotifications();
+  }, []);
 
   return (
     <div
@@ -1314,6 +1478,25 @@ const TeamSyncDashboard = () => {
             TeamSync
           </h1>
         </div>
+        <Box display="flex" alignItems="center" gap={2}>
+          <Typography variant="h4" sx={{ color: theme === 'dark' ? '#fff' : '#333' }}>
+            Dashboard
+          </Typography>
+          <Badge badgeContent={unreadNotifications} color="error">
+            <IconButton
+              onClick={() => setNotificationCenterOpen(true)}
+              sx={{
+                bgcolor: theme === 'dark' ? '#1976d2' : '#1976d2',
+                color: 'white',
+                '&:hover': {
+                  bgcolor: theme === 'dark' ? '#1565c0' : '#1565c0',
+                },
+              }}
+            >
+              <NotificationsIcon />
+            </IconButton>
+          </Badge>
+        </Box>
         <div style={{ display: "flex", alignItems: "center", gap: "15px" }}>
           {/* Theme Switcher */}
           <button
@@ -1330,85 +1513,7 @@ const TeamSyncDashboard = () => {
           >
             {theme === "dark" ? "🌞" : "🌙"}
           </button>
-          {/* Notifications */}
-          <div style={{ position: "relative" }}>
-            <button
-              onClick={() => setNotificationMenuOpen(!notificationMenuOpen)}
-              style={{
-                background: "none",
-                border: "none",
-                color: "white",
-                fontSize: "24px",
-                cursor: "pointer",
-                position: "relative",
-              }}
-            >
-              🔔
-              <span
-                style={{
-                  position: "absolute",
-                  top: "-5px",
-                  right: "-5px",
-                  backgroundColor: "#f44336",
-                  color: "white",
-                  borderRadius: "50%",
-                  width: "20px",
-                  height: "20px",
-                  fontSize: "12px",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                {notifications.length}
-              </span>
-            </button>
-            {notificationMenuOpen && (
-              <div
-                style={{
-                  position: "absolute",
-                  top: "100%",
-                  right: 0,
-                  backgroundColor: "white",
-                  border: "1px solid #ddd",
-                  borderRadius: "8px",
-                  boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
-                  width: "350px",
-                  zIndex: 1000,
-                  color: "#333",
-                }}
-              >
-                <div
-                  style={{ padding: "15px", borderBottom: "1px solid #eee" }}
-                >
-                  <h3 style={{ margin: 0, fontSize: "18px" }}>Notifications</h3>
-                </div>
-                {notifications.length === 0 ? (
-                  <div style={{ padding: "15px", color: "#888" }}>
-                    No notifications.
-                  </div>
-                ) : (
-                  notifications.map((notification) => (
-                    <div
-                      key={notification.id}
-                      style={{
-                        padding: "15px",
-                        borderBottom: "1px solid #eee",
-                        cursor: "pointer",
-                      }}
-                    >
-                      <p style={{ margin: "0 0 5px 0", fontSize: "14px" }}>
-                        {notification.message}
-                      </p>
-                      <small style={{ color: "#666" }}>
-                        {notification.time}
-                      </small>
-                    </div>
-                  ))
-                )}
-              </div>
-            )}
-          </div>
+
           {/* Profile Menu */}
           <div style={{ position: "relative" }}>
             <button
@@ -1536,11 +1641,8 @@ const TeamSyncDashboard = () => {
               meetings={meetings}
               notifications={notifications}
               user={user}
-              onJoinProject={() => {
-                // This function will be implemented to refetch projects
-                // For now, it just closes the modal
-                setProjects((prev) => [...prev]);
-              }}
+              onJoinProject={fetchProjects}
+              fetchProjects={fetchProjects}
             />
           )}
           {role === "admin" && (
@@ -1553,10 +1655,18 @@ const TeamSyncDashboard = () => {
               onProjectCreated={(project) =>
                 setProjects((prev) => [project, ...prev])
               }
+              fetchProjects={fetchProjects}
             />
           )}
         </div>
       </div>
+      <NotificationCenter
+        open={notificationCenterOpen}
+        onClose={() => setNotificationCenterOpen(false)}
+        notifications={notifications}
+        unreadNotifications={unreadNotifications}
+        setUnreadNotifications={setUnreadNotifications}
+      />
     </div>
   );
 };

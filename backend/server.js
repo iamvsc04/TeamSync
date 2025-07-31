@@ -8,6 +8,8 @@ const { Server } = require("socket.io");
 const authRoutes = require("./routes/auth");
 const taskRoutes = require("./routes/task");
 const projectRoutes = require("./routes/project");
+const meetingRoutes = require("./routes/meeting");
+const notificationRoutes = require("./routes/notification");
 const ChatMessage = require("./models/ChatMessage");
 
 const app = express();
@@ -63,14 +65,13 @@ io.on("connection", (socket) => {
 app.use("/api/auth", authRoutes);
 app.use("/api/tasks", taskRoutes);
 app.use("/api/projects", projectRoutes);
+app.use("/api/meetings", meetingRoutes);
+app.use("/api/notifications", notificationRoutes);
 
 const PORT = process.env.PORT || 5000;
 
 mongoose
-  .connect(process.env.MONGO_URI, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
-  })
+  .connect(process.env.MONGO_URI)
   .then(() => {
     console.log("MongoDB connected");
     server.listen(PORT, () => {

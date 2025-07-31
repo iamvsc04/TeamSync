@@ -41,6 +41,14 @@ const ProjectSchema = new mongoose.Schema(
         requestedAt: { type: Date, default: Date.now },
       },
     ],
+    documents: [
+      {
+        filename: { type: String, required: true },
+        originalname: { type: String, required: true },
+        uploadedAt: { type: Date, default: Date.now },
+        uploader: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+      },
+    ],
   },
   { timestamps: true }
 );
