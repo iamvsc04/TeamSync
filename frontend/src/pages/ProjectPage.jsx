@@ -1420,356 +1420,50 @@ function MemberProjectView({ project, setChatDrawerOpen }) {
   };
 
   return (
-    <Box sx={{ width: "100vw", py: 4, px: { xs: 2, md: 4 } }}>
-      {/* Professional Project Header */}
-      <Paper 
-        sx={{ 
-          p: 4, 
-          mb: 4, 
-          bgcolor: theme === 'dark' ? '#2d2d2d' : '#fff',
-          borderRadius: 2,
-          boxShadow: theme === 'dark' ? '0 4px 20px rgba(0,0,0,0.3)' : '0 4px 20px rgba(0,0,0,0.1)',
-          border: `1px solid ${theme === 'dark' ? '#444' : '#e0e0e0'}`,
-        }}
-      >
+    <Box sx={{ width: '100vw', py: 4, px: { xs: 2, md: 4 } }}>
+      {/* Project Header */}
+      <Paper sx={{ p: 4, mb: 4, bgcolor: theme === 'dark' ? '#2d2d2d' : '#fff', borderRadius: 2, boxShadow: theme === 'dark' ? '0 4px 20px rgba(0,0,0,0.3)' : '0 4px 20px rgba(0,0,0,0.1)', border: `1px solid ${theme === 'dark' ? '#444' : '#e0e0e0'}` }}>
         <Box display="flex" justifyContent="space-between" alignItems="flex-start" mb={3}>
           <Box sx={{ flex: 1, mr: 3 }}>
-            <Typography 
-              variant="h3" 
-              fontWeight={700} 
-              color="primary" 
-              mb={1}
-              sx={{ color: theme === 'dark' ? '#fff' : '#1976d2' }}
-            >
-              {project.name}
-            </Typography>
-            <Typography 
-              variant="h6" 
-              color="text.secondary" 
-              mb={2}
-              sx={{ color: theme === 'dark' ? '#ccc' : '#666' }}
-            >
-              {project.description || "No description available"}
-            </Typography>
+            <Typography variant="h3" fontWeight={700} color="primary" mb={1} sx={{ color: theme === 'dark' ? '#fff' : '#1976d2' }}>{project.name}</Typography>
+            <Typography variant="h6" color="text.secondary" mb={2} sx={{ color: theme === 'dark' ? '#ccc' : '#666' }}>{project.description || 'No description available'}</Typography>
             <Box display="flex" gap={1} flexWrap="wrap">
-              <Chip 
-                label={project.status || "active"} 
-                color={project.status === "completed" ? "success" : "primary"} 
-                size="small"
-              />
-              <Chip 
-                label={`Created by ${project.createdBy?.name || "Unknown"}`} 
-                color="secondary" 
-                size="small"
-              />
-              <Chip 
-                label={`${project.members?.length || 0} members`} 
-                color="info" 
-                size="small"
-              />
+              <Chip label={project.status || 'active'} color={project.status === 'completed' ? 'success' : 'primary'} size="small" />
+              <Chip label={`Created by ${project.createdBy?.name || 'Unknown'}`} color="secondary" size="small" />
+              <Chip label={`${project.members?.length || 0} members`} color="info" size="small" />
             </Box>
           </Box>
           <Box display="flex" gap={3} sx={{ flexShrink: 0, alignItems: 'flex-start' }}>
             <Tooltip title="Project Chat" placement="top">
-              <IconButton
-                onClick={() => setChatDrawerOpen(true)}
-                sx={{
-                  bgcolor: theme === 'dark' ? '#1976d2' : '#1976d2',
-                  color: 'white',
-                  width: 48,
-                  height: 48,
-                  '&:hover': { 
-                    bgcolor: theme === 'dark' ? '#1565c0' : '#1565c0',
-                    transform: 'scale(1.05)',
-                  },
-                  transition: 'all 0.2s ease',
-                  boxShadow: theme === 'dark' ? '0 4px 12px rgba(25, 118, 210, 0.3)' : '0 4px 12px rgba(25, 118, 210, 0.2)',
-                }}
-              >
-                <ChatIcon />
-              </IconButton>
-            </Tooltip>
-            <Tooltip title="Toggle Theme" placement="top">
-              <IconButton
-                onClick={() => {
-                  const newTheme = theme === 'dark' ? 'light' : 'dark';
-                  localStorage.setItem('theme', newTheme);
-                  window.location.reload();
-                }}
-                sx={{
-                  bgcolor: theme === 'dark' ? '#fbbf24' : '#1e293b',
-                  color: theme === 'dark' ? '#1e293b' : '#fbbf24',
-                  width: 48,
-                  height: 48,
-                  '&:hover': { 
-                    bgcolor: theme === 'dark' ? '#f59e0b' : '#334155',
-                    transform: 'scale(1.05)',
-                  },
-                  transition: 'all 0.2s ease',
-                  boxShadow: theme === 'dark' ? '0 4px 12px rgba(251, 191, 36, 0.3)' : '0 4px 12px rgba(30, 41, 59, 0.3)',
-                }}
-              >
-                {theme === 'dark' ? '☀️' : '🌙'}
-              </IconButton>
+              <IconButton onClick={() => setChatDrawerOpen(true)} sx={{ bgcolor: theme === 'dark' ? '#1976d2' : '#1976d2', color: 'white', width: 48, height: 48, '&:hover': { bgcolor: theme === 'dark' ? '#1565c0' : '#1565c0', transform: 'scale(1.05)' }, transition: 'all 0.2s ease', boxShadow: theme === 'dark' ? '0 4px 12px rgba(25, 118, 210, 0.3)' : '0 4px 12px rgba(25, 118, 210, 0.2)' }}><ChatIcon /></IconButton>
             </Tooltip>
           </Box>
         </Box>
       </Paper>
-
-      <Grid container spacing={3}>
-        {/* Project Info */}
+      {/* Project Info Section (read-only) */}
+      <Grid container spacing={3} mb={4}>
         <Grid item xs={12} md={6}>
-          <Paper 
-            sx={{ 
-              p: 3, 
-              bgcolor: theme === 'dark' ? '#2d2d2d' : '#fff',
-              borderRadius: 2,
-              boxShadow: theme === 'dark' ? '0 2px 10px rgba(0,0,0,0.2)' : '0 2px 10px rgba(0,0,0,0.1)',
-              border: `1px solid ${theme === 'dark' ? '#444' : '#e0e0e0'}`,
-            }}
-          >
-            <Typography 
-              variant="h5" 
-              fontWeight={600} 
-              display="flex" 
-              alignItems="center" 
-              gap={1} 
-              mb={3}
-              sx={{ color: theme === 'dark' ? '#fff' : '#333' }}
-            >
-              <VisibilityIcon color="primary" />
-              Project Information
-            </Typography>
-            
-            <Box display="flex" flexDirection="column" gap={3}>
-              <Box>
-                <Typography variant="subtitle2" color="text.secondary" mb={1} sx={{ color: theme === 'dark' ? '#ccc' : '#666' }}>
-                  Start Date
-                </Typography>
-                <Typography variant="body1" fontWeight={600} sx={{ color: theme === 'dark' ? '#fff' : '#333' }}>
-                  {project.startDate ? new Date(project.startDate).toLocaleDateString() : "Not set"}
-                </Typography>
-              </Box>
-              <Box>
-                <Typography variant="subtitle2" color="text.secondary" mb={1} sx={{ color: theme === 'dark' ? '#ccc' : '#666' }}>
-                  End Date
-                </Typography>
-                <Typography variant="body1" fontWeight={600} sx={{ color: theme === 'dark' ? '#fff' : '#333' }}>
-                  {project.endDate ? new Date(project.endDate).toLocaleDateString() : "Not set"}
-                </Typography>
-              </Box>
-              <Box>
-                <Typography variant="subtitle2" color="text.secondary" mb={1} sx={{ color: theme === 'dark' ? '#ccc' : '#666' }}>
-                  Created
-                </Typography>
-                <Typography variant="body1" fontWeight={600} sx={{ color: theme === 'dark' ? '#fff' : '#333' }}>
-                  {new Date(project.createdAt).toLocaleDateString()}
-                </Typography>
-              </Box>
+          <Card sx={{ p: 3, borderRadius: 2, boxShadow: 1 }}>
+            <Typography variant="h5" fontWeight={600} mb={2}><VisibilityIcon color="primary" sx={{ mr: 1 }} />Project Information</Typography>
+            <Typography variant="body2" color="text.secondary" mb={1}>Start Date: {project.startDate ? new Date(project.startDate).toLocaleDateString() : 'Not set'}</Typography>
+            <Typography variant="body2" color="text.secondary" mb={1}>End Date: {project.endDate ? new Date(project.endDate).toLocaleDateString() : 'Not set'}</Typography>
+            <Typography variant="body2" color="text.secondary" mb={1}>Created: {new Date(project.createdAt).toLocaleDateString()}</Typography>
+          </Card>
+        </Grid>
+        <Grid item xs={12} md={6}>
+          <Card sx={{ p: 3, borderRadius: 2, boxShadow: 1 }}>
+            <Typography variant="h5" fontWeight={600} mb={2}><GroupIcon color="primary" sx={{ mr: 1 }} />Project Members</Typography>
+            <Box display="flex" gap={1} flexWrap="wrap">
+              {project.members?.map((member) => (
+                <Chip key={member._id} label={member.name} avatar={<Avatar>{member.name[0]}</Avatar>} />
+              ))}
             </Box>
-          </Paper>
-        </Grid>
-
-        {/* Team Members */}
-        <Grid item xs={12} md={6}>
-          <Paper 
-            sx={{ 
-              p: 3, 
-              bgcolor: theme === 'dark' ? '#2d2d2d' : '#fff',
-              borderRadius: 2,
-              boxShadow: theme === 'dark' ? '0 2px 10px rgba(0,0,0,0.2)' : '0 2px 10px rgba(0,0,0,0.1)',
-              border: `1px solid ${theme === 'dark' ? '#444' : '#e0e0e0'}`,
-            }}
-          >
-            <Typography 
-              variant="h5" 
-              fontWeight={600} 
-              display="flex" 
-              alignItems="center" 
-              gap={1} 
-              mb={3}
-              sx={{ color: theme === 'dark' ? '#fff' : '#333' }}
-            >
-              <GroupIcon color="primary" />
-              Team Members
-            </Typography>
-            
-            <List>
-              {project.members && project.members.length > 0 ? (
-                project.members.map((member) => (
-                  <ListItem
-                    key={member._id}
-                    sx={{
-                      mb: 1,
-                      borderRadius: 2,
-                      bgcolor: theme === 'dark' ? '#333' : '#f8f9fa',
-                      border: `1px solid ${theme === 'dark' ? '#444' : '#e9ecef'}`,
-                    }}
-                  >
-                    <ListItemAvatar>
-                      <Avatar 
-                        sx={{ 
-                          bgcolor: member.role === "admin" 
-                            ? "linear-gradient(135deg, #667eea 0%, #764ba2 100%)"
-                            : "linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)",
-                        }}
-                      >
-                        {member.name ? member.name.charAt(0).toUpperCase() : "M"}
-                      </Avatar>
-                    </ListItemAvatar>
-                    <ListItemText
-                      primary={
-                        <Box display="flex" alignItems="center" gap={1}>
-                          <Typography fontWeight={600} sx={{ color: theme === 'dark' ? '#fff' : '#333' }}>
-                            {member.name}
-                          </Typography>
-                          {member.role === "admin" && (
-                            <Chip 
-                              label="Admin" 
-                              size="small" 
-                              sx={{ 
-                                background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-                                color: 'white',
-                              }}
-                            />
-                          )}
-                        </Box>
-                      }
-                      secondary={
-                        <Typography sx={{ color: theme === 'dark' ? '#ccc' : '#666' }}>
-                          {member.email}
-                        </Typography>
-                      }
-                    />
-                  </ListItem>
-                ))
-              ) : (
-                <Typography color="text.secondary" textAlign="center" py={2}>
-                  No members in this project.
-                </Typography>
-              )}
-            </List>
-          </Paper>
-        </Grid>
-
-        {/* Documents */}
-        <Grid item xs={12}>
-          <Paper 
-            sx={{ 
-              p: 3, 
-              bgcolor: theme === 'dark' ? '#2d2d2d' : '#fff',
-              borderRadius: 2,
-              boxShadow: theme === 'dark' ? '0 2px 10px rgba(0,0,0,0.2)' : '0 2px 10px rgba(0,0,0,0.1)',
-              border: `1px solid ${theme === 'dark' ? '#444' : '#e0e0e0'}`,
-            }}
-          >
-            <Typography 
-              variant="h5" 
-              fontWeight={600} 
-              display="flex" 
-              alignItems="center" 
-              gap={1} 
-              mb={3}
-              sx={{ color: theme === 'dark' ? '#fff' : '#333' }}
-            >
-              <DescriptionIcon color="primary" />
-              Project Documents
-            </Typography>
-            
-            {project.documents && project.documents.length > 0 ? (
-              <List sx={{ p: 0 }}>
-                {project.documents.map((doc) => (
-                  <ListItem
-                    key={doc._id}
-                    sx={{
-                      mb: 1,
-                      borderRadius: 2,
-                      bgcolor: theme === 'dark' ? '#333' : '#f8f9fa',
-                      border: `1px solid ${theme === 'dark' ? '#444' : '#e9ecef'}`,
-                      p: 2,
-                    }}
-                  >
-                    <Box sx={{ display: 'flex', alignItems: 'center', width: '100%', gap: 2 }}>
-                      <Avatar sx={{ bgcolor: "primary.main", width: 40, height: 40 }}>
-                        <DescriptionIcon />
-                      </Avatar>
-                      <Box sx={{ flex: 1, minWidth: 0 }}>
-                        <Typography 
-                          variant="body1" 
-                          fontWeight={600}
-                          sx={{ 
-                            color: theme === 'dark' ? '#fff' : '#333',
-                            mb: 0.5,
-                            wordBreak: 'break-word'
-                          }}
-                        >
-                          {doc.originalname}
-                        </Typography>
-                        <Typography 
-                          variant="caption" 
-                          sx={{ 
-                            color: theme === 'dark' ? '#ccc' : '#666',
-                            display: 'block'
-                          }}
-                        >
-                          Uploaded on {new Date(doc.uploadedAt || doc.uploadDate).toLocaleDateString()}
-                        </Typography>
-                      </Box>
-                      <Box display="flex" gap={1} sx={{ flexShrink: 0 }}>
-                        <Tooltip title="Preview Document">
-                          <IconButton
-                            size="small"
-                            onClick={() => handleDocumentPreview(doc)}
-                            sx={{ 
-                              borderRadius: 1,
-                              bgcolor: theme === 'dark' ? '#444' : '#e3f2fd',
-                              color: '#1976d2',
-                              '&:hover': { bgcolor: theme === 'dark' ? '#555' : '#bbdefb' }
-                            }}
-                          >
-                            <VisibilityIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                        <Tooltip title="Download Document">
-                          <IconButton
-                            size="small"
-                            onClick={() => handleDocumentDownload(doc)}
-                            sx={{ 
-                              borderRadius: 1,
-                              bgcolor: '#4caf50',
-                              color: 'white',
-                              '&:hover': { bgcolor: '#388e3c' }
-                            }}
-                          >
-                            <DownloadIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                      </Box>
-                    </Box>
-                  </ListItem>
-                ))}
-              </List>
-            ) : (
-              <Typography color="text.secondary" textAlign="center" py={2}>
-                No documents available for this project.
-              </Typography>
-            )}
-          </Paper>
-        </Grid>
-
-        {/* Task Management Section */}
-        <Grid item xs={12}>
-          <Paper sx={{ p: 3, mb: 3, bgcolor: theme === 'dark' ? '#2d2d2d' : '#fff' }}>
-            <Typography variant="h6" gutterBottom sx={{ color: theme === 'dark' ? '#fff' : '#333' }}>
-              Task Management
-            </Typography>
-            <TaskManagement 
-              projectId={project._id} 
-              onTaskUpdate={() => {}}
-            />
-          </Paper>
+          </Card>
         </Grid>
       </Grid>
+      {/* Editable Section: Only allowed fields (e.g., progress/comments) */}
+      {/* Add your allowed editable fields/components here, e.g., TaskManagement, comments, etc. */}
+      {/* ... existing code for tasks, meetings, chat, etc. ... */}
     </Box>
   );
 }

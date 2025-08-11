@@ -347,7 +347,7 @@ const TaskManagement = ({ projectId, onTaskUpdate }) => {
       setTaskForm({
         title: task.title,
         description: task.description,
-        assignedTo: task.assignedTo._id,
+        assignedTo: task.assignedTo?._id || task.assignedTo || user.id,
         priority: task.priority,
         status: task.status,
         dueDate: task.dueDate ? new Date(task.dueDate).toISOString().split('T')[0] : '',
@@ -357,8 +357,20 @@ const TaskManagement = ({ projectId, onTaskUpdate }) => {
       });
     } else {
       setEditingTask(null);
-      resetTaskForm();
+      setTaskForm({
+        title: '',
+        description: '',
+        assignedTo: user.id,
+        priority: 'medium',
+        status: 'pending',
+        dueDate: '',
+        estimatedHours: '',
+        progress: 0,
+        tags: '',
+      });
     }
+    // Always fetch project members before opening dialog
+    fetchProjectMembers();
     setTaskDialogOpen(true);
   };
 
@@ -544,16 +556,22 @@ const TaskManagement = ({ projectId, onTaskUpdate }) => {
               />
               <ListItemSecondaryAction>
                 <Box display="flex" gap={1}>
-                  <Tooltip title="Edit Task">
-                    <IconButton onClick={() => openTaskDialog(task)}>
-                      <EditIcon />
-                    </IconButton>
-                  </Tooltip>
-                  <Tooltip title="Delete Task">
-                    <IconButton onClick={() => handleDeleteTask(task._id)} color="error">
-                      <DeleteIcon />
-                    </IconButton>
-                  </Tooltip>
+                  {/* Only show edit button if user is admin or assigned to the task */}
+                  {((user.role === 'admin') || (task.assignedTo && (task.assignedTo._id === user.id || task.assignedTo === user.id))) && (
+                    <Tooltip title="Edit Task">
+                      <IconButton onClick={() => openTaskDialog(task)}>
+                        <EditIcon />
+                      </IconButton>
+                    </Tooltip>
+                  )}
+                  {/* Only show delete button if user is admin or assigned to the task */}
+                  {((user.role === 'admin') || (task.assignedTo && (task.assignedTo._id === user.id || task.assignedTo === user.id))) && (
+                    <Tooltip title="Delete Task">
+                      <IconButton onClick={() => handleDeleteTask(task._id)} color="error">
+                        <DeleteIcon />
+                      </IconButton>
+                    </Tooltip>
+                  )}
                   <Tooltip title={activeTimers[task._id] ? "Stop Timer" : "Start Timer"}>
                     <IconButton 
                       onClick={() => activeTimers[task._id] 
@@ -621,7 +639,7 @@ const TaskManagement = ({ projectId, onTaskUpdate }) => {
               />
             </Grid>
             <Grid item xs={12} sm={6}>
-              <FormControl fullWidth>
+              <FormControl fullWidth error={taskForm.assignedTo === '' && taskForm.assignedTo !== user.id}>
                 <InputLabel>Assigned To</InputLabel>
                 <Select
                   value={taskForm.assignedTo}
@@ -633,6 +651,11 @@ const TaskManagement = ({ projectId, onTaskUpdate }) => {
                     </MenuItem>
                   ))}
                 </Select>
+                {taskForm.assignedTo === '' && taskForm.assignedTo !== user.id && (
+                  <Typography variant="caption" color="error">
+                    Please select an assigned member.
+                  </Typography>
+                )}
               </FormControl>
             </Grid>
             <Grid item xs={12} sm={6}>

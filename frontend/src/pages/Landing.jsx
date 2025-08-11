@@ -50,12 +50,12 @@ const ICON_BG = {
   light: [
     "linear-gradient(135deg, #3b82f6, #1d4ed8)",
     "linear-gradient(135deg, #10b981, #059669)",
-    "linear-gradient(135deg, #f59e0b, #d97706)",
+    "linear-gradient(135deg, #824d12ff, #64290bff)",
   ],
   dark: [
     "linear-gradient(135deg, #6366f1, #3730a3)",
     "linear-gradient(135deg, #34d399, #047857)",
-    "linear-gradient(135deg, #fbbf24, #b45309)",
+    "linear-gradient(135deg,#824d12ff, #64290bff )",
   ],
 };
 
