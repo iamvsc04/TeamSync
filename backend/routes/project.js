@@ -73,6 +73,45 @@ router.post("/", authMiddleware, async (req, res) => {
   }
 });
 
+// Update project details (name, description, status) - only creator or admin
+router.put("/:id", authMiddleware, async (req, res) => {
+  try {
+    const { name, description, status } = req.body;
+    const project = await Project.findById(req.params.id);
+    if (!project) {
+      return res.status(404).json({ message: "Project not found." });
+    }
+
+    const isAdmin = req.user.role === "admin";
+    const isCreator = String(project.createdBy) === req.user.userId;
+    if (!isAdmin && !isCreator) {
+      return res
+        .status(403)
+        .json({ message: "Not authorized to update this project." });
+    }
+
+    if (name !== undefined) project.name = name;
+    if (description !== undefined) project.description = description;
+    if (
+      status !== undefined &&
+      ["active", "completed", "archived"].includes(status)
+    ) {
+      project.status = status;
+    }
+
+    await project.save();
+
+    const populated = await Project.findById(project._id)
+      .populate("members", "name email role")
+      .populate("createdBy", "name email");
+
+    return res.json(populated);
+  } catch (err) {
+    console.error("Error updating project:", err);
+    return res.status(500).json({ message: "Server error." });
+  }
+});
+
 // Get all ongoing (active) projects
 router.get("/ongoing", authMiddleware, async (req, res) => {
   try {
@@ -100,12 +139,10 @@ router.get("/mine", authMiddleware, async (req, res) => {
 // Member: Get all join requests made by the user
 router.get("/my-join-requests", authMiddleware, async (req, res) => {
   try {
-    
     const projects = await Project.find({
       "joinRequests.user": req.user.userId,
     }).select("name joinRequests");
-    
-    
+
     const requests = [];
     projects.forEach((project) => {
       project.joinRequests.forEach((reqst) => {
@@ -119,8 +156,7 @@ router.get("/my-join-requests", authMiddleware, async (req, res) => {
         }
       });
     });
-    
-    
+
     res.json(requests);
   } catch (err) {
     console.error("Error in my-join-requests route:", err);
@@ -131,15 +167,13 @@ router.get("/my-join-requests", authMiddleware, async (req, res) => {
 // Member: Get all projects where the user is a member
 router.get("/member-projects", authMiddleware, async (req, res) => {
   try {
-    
-    const projects = await Project.find({ 
-      members: req.user.userId
+    const projects = await Project.find({
+      members: req.user.userId,
     })
       .populate("members", "name email role")
       .populate("createdBy", "name email")
       .sort({ createdAt: -1 });
-    
-    
+
     res.json(projects);
   } catch (err) {
     console.error("Error in member-projects route:", err);
@@ -202,11 +236,13 @@ router.post("/:id/add-member-by-email", authMiddleware, async (req, res) => {
     }
     // Check if already a member
     if (project.members.some((id) => id.toString() === user._id.toString())) {
-      return res.status(400).json({ message: "User is already a member of this project." });
+      return res
+        .status(400)
+        .json({ message: "User is already a member of this project." });
     }
     project.members.push(user._id);
     await project.save();
-    
+
     // Create notification for the user who was added
     try {
       const Notification = require("../models/Notification");
@@ -218,15 +254,21 @@ router.post("/:id/add-member-by-email", authMiddleware, async (req, res) => {
         message: `You have been added to the project "${project.name}" by the admin.`,
         project: project._id,
         category: "projects",
-        priority: "medium"
+        priority: "medium",
       });
     } catch (notificationErr) {
       console.error("Error creating notification:", notificationErr);
       // Don't fail the main request if notification fails
     }
-    
-    const updatedProject = await Project.findById(req.params.id).populate("members", "name email role");
-    res.json({ message: "Member added successfully.", project: updatedProject });
+
+    const updatedProject = await Project.findById(req.params.id).populate(
+      "members",
+      "name email role"
+    );
+    res.json({
+      message: "Member added successfully.",
+      project: updatedProject,
+    });
   } catch (err) {
     res.status(500).json({ message: "Server error." });
   }
@@ -285,13 +327,13 @@ router.post("/join-request", authMiddleware, async (req, res) => {
     // Add join request
     project.joinRequests.push({ user: req.user.userId });
     await project.save();
-    
+
     // Create notification for the project admin
     try {
       const Notification = require("../models/Notification");
       const User = require("../models/User");
       const user = await User.findById(req.user.userId).select("name email");
-      
+
       await Notification.createNotification({
         recipient: project.createdBy,
         sender: req.user.userId,
@@ -300,13 +342,13 @@ router.post("/join-request", authMiddleware, async (req, res) => {
         message: `${user.name} (${user.email}) has requested to join your project "${project.name}"`,
         project: project._id,
         category: "projects",
-        priority: "medium"
+        priority: "medium",
       });
     } catch (notificationErr) {
       console.error("Error creating notification:", notificationErr);
       // Don't fail the main request if notification fails
     }
-    
+
     res.json({ message: "Join request sent. Awaiting admin approval." });
   } catch (err) {
     res.status(500).json({ message: "Server error." });
@@ -318,12 +360,12 @@ router.get("/join-requests", authMiddleware, async (req, res) => {
   if (req.user.role !== "admin") {
     return res.status(403).json({ message: "Admins only" });
   }
-  
+
   try {
     const projects = await Project.find({ createdBy: req.user.userId })
       .populate("joinRequests.user", "name email")
       .select("name joinRequests");
-    
+
     // Flatten join requests with project info
     const requests = [];
     projects.forEach((project) => {
@@ -339,7 +381,7 @@ router.get("/join-requests", authMiddleware, async (req, res) => {
         }
       });
     });
-    
+
     res.json(requests);
   } catch (err) {
     res.status(500).json({ message: "Server error." });
@@ -374,20 +416,20 @@ router.patch(
         if (!project.members.some((m) => m.toString() === userId)) {
           project.members.push(userId);
         }
-        
+
         // Create notification for the user whose request was approved
         try {
           const Notification = require("../models/Notification");
-                  await Notification.createNotification({
-          recipient: userId,
-          sender: req.user.userId,
-          type: "join_request_approved",
-          title: "Join Request Approved",
-          message: `Your join request for project "${project.name}" has been approved!`,
-          project: projectId,
-          category: "projects",
-          priority: "medium"
-        });
+          await Notification.createNotification({
+            recipient: userId,
+            sender: req.user.userId,
+            type: "join_request_approved",
+            title: "Join Request Approved",
+            message: `Your join request for project "${project.name}" has been approved!`,
+            project: projectId,
+            category: "projects",
+            priority: "medium",
+          });
         } catch (notificationErr) {
           console.error("Error creating notification:", notificationErr);
           // Don't fail the main request if notification fails
@@ -396,25 +438,28 @@ router.patch(
         // Create notification for the user whose request was rejected
         try {
           const Notification = require("../models/Notification");
-                  await Notification.createNotification({
-          recipient: userId,
-          sender: req.user.userId,
-          type: "join_request_rejected",
-          title: "Join Request Rejected",
-          message: `Your join request for project "${project.name}" has been rejected.`,
-          project: projectId,
-          category: "projects",
-          priority: "medium"
-        });
+          await Notification.createNotification({
+            recipient: userId,
+            sender: req.user.userId,
+            type: "join_request_rejected",
+            title: "Join Request Rejected",
+            message: `Your join request for project "${project.name}" has been rejected.`,
+            project: projectId,
+            category: "projects",
+            priority: "medium",
+          });
         } catch (notificationErr) {
           console.error("Error creating notification:", notificationErr);
           // Don't fail the main request if notification fails
         }
       }
-      
+
       await project.save();
       // Return updated project for frontend
-      const updatedProject = await Project.findById(projectId).populate("members", "name email role");
+      const updatedProject = await Project.findById(projectId).populate(
+        "members",
+        "name email role"
+      );
       res.json({ message: `Request ${status}.`, project: updatedProject });
     } catch (err) {
       res.status(500).json({ message: "Server error." });
@@ -422,24 +467,94 @@ router.patch(
   }
 );
 
-// Get chat history for a project
-router.get("/:projectId/chat", authMiddleware, async (req, res) => {
-  const { projectId } = req.params;
+// Get project chat messages
+router.get("/:id/chat", authMiddleware, async (req, res) => {
   try {
+    const projectId = req.params.id;
+    const page = Math.max(parseInt(req.query.page) || 1, 1);
+    const limit = Math.min(parseInt(req.query.limit) || 50, 200);
+    const skip = (page - 1) * limit;
     const project = await Project.findById(projectId);
-    if (!project) return res.status(404).json({ message: "Project not found" });
-    // Only members or admins can view chat
-    if (
-      req.user.role !== "admin" &&
-      !project.members.map(m => String(m)).includes(req.user.userId)
-    ) {
-      return res.status(403).json({ message: "Not authorized to view chat" });
+
+    if (!project) {
+      return res.status(404).json({ message: "Project not found" });
     }
+
+    // Check if user is a member of the project
+    const isMember = project.members.some(
+      (member) =>
+        member._id.toString() === req.user.userId ||
+        member.toString() === req.user.userId
+    );
+
+    if (!isMember) {
+      return res.status(403).json({ message: "Access denied" });
+    }
+
+    const total = await ChatMessage.countDocuments({ projectId });
     const messages = await ChatMessage.find({ projectId })
+      .populate("senderId", "name email role")
       .sort({ timestamp: 1 })
-      .populate("senderId", "name email role");
-    res.json(messages);
-  } catch (err) {
+      .skip(skip)
+      .limit(limit);
+
+    res.json({
+      messages,
+      pagination: {
+        currentPage: page,
+        totalPages: Math.max(1, Math.ceil(total / limit)),
+        totalItems: total,
+        itemsPerPage: limit,
+      },
+    });
+  } catch (error) {
+    console.error("Error fetching chat messages:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+// Send chat message
+router.post("/:id/chat", authMiddleware, async (req, res) => {
+  try {
+    const projectId = req.params.id;
+    const { message, replyTo } = req.body;
+
+    if (!message || !message.trim()) {
+      return res.status(400).json({ message: "Message is required" });
+    }
+
+    const project = await Project.findById(projectId);
+    if (!project) {
+      return res.status(404).json({ message: "Project not found" });
+    }
+
+    // Check if user is a member of the project
+    const isMember = project.members.some(
+      (member) =>
+        member._id.toString() === req.user.userId ||
+        member.toString() === req.user.userId
+    );
+
+    if (!isMember) {
+      return res.status(403).json({ message: "Access denied" });
+    }
+
+    const chatMessage = new ChatMessage({
+      projectId,
+      senderId: req.user.userId,
+      message: message.trim(),
+      replyTo: replyTo || null,
+      timestamp: new Date(),
+    });
+
+    await chatMessage.save();
+
+    // Populate sender info for the response
+    await chatMessage.populate("senderId", "name email role");
+
+    res.status(201).json(chatMessage);
+  } catch (error) {
+    console.error("Error sending chat message:", error);
     res.status(500).json({ message: "Server error" });
   }
 });
@@ -451,18 +566,21 @@ router.post(
   upload.array("file", 10), // Allow up to 10 files
   async (req, res) => {
     if (req.user.role !== "admin") {
-      return res.status(403).json({ message: "Only admin can upload documents" });
+      return res
+        .status(403)
+        .json({ message: "Only admin can upload documents" });
     }
     try {
       const project = await Project.findById(req.params.id);
-      if (!project) return res.status(404).json({ message: "Project not found" });
+      if (!project)
+        return res.status(404).json({ message: "Project not found" });
       if (project.createdBy.toString() !== req.user.userId) {
         return res.status(403).json({ message: "Not your project." });
       }
       if (!req.files || req.files.length === 0) {
         return res.status(400).json({ message: "No files uploaded." });
       }
-      
+
       const uploadedDocs = [];
       for (const file of req.files) {
         const docMeta = {
@@ -473,11 +591,11 @@ router.post(
         project.documents.push(docMeta);
         uploadedDocs.push(docMeta);
       }
-      
+
       await project.save();
-      res.status(201).json({ 
-        message: `${uploadedDocs.length} document(s) uploaded.`, 
-        documents: uploadedDocs 
+      res.status(201).json({
+        message: `${uploadedDocs.length} document(s) uploaded.`,
+        documents: uploadedDocs,
       });
     } catch (err) {
       res.status(500).json({ message: "Server error." });
@@ -488,14 +606,19 @@ router.post(
 // List all documents for a project
 router.get("/:id/documents", authMiddleware, async (req, res) => {
   try {
-    const project = await Project.findById(req.params.id).populate("documents.uploader", "name email");
+    const project = await Project.findById(req.params.id).populate(
+      "documents.uploader",
+      "name email"
+    );
     if (!project) return res.status(404).json({ message: "Project not found" });
     // Only members or admins can view documents
     if (
       req.user.role !== "admin" &&
-      !project.members.map(m => String(m)).includes(req.user.userId)
+      !project.members.map((m) => String(m)).includes(req.user.userId)
     ) {
-      return res.status(403).json({ message: "Not authorized to view documents" });
+      return res
+        .status(403)
+        .json({ message: "Not authorized to view documents" });
     }
     res.json(project.documents);
   } catch (err) {
@@ -504,89 +627,110 @@ router.get("/:id/documents", authMiddleware, async (req, res) => {
 });
 
 // Download a document
-router.get("/:id/documents/:docId/download", authMiddleware, async (req, res) => {
-  try {
-    const project = await Project.findById(req.params.id);
-    if (!project) return res.status(404).json({ message: "Project not found" });
-    // Only members or admins can download documents
-    if (
-      req.user.role !== "admin" &&
-      !project.members.map(m => String(m)).includes(req.user.userId)
-    ) {
-      return res.status(403).json({ message: "Not authorized to download documents" });
+router.get(
+  "/:id/documents/:docId/download",
+  authMiddleware,
+  async (req, res) => {
+    try {
+      const project = await Project.findById(req.params.id);
+      if (!project)
+        return res.status(404).json({ message: "Project not found" });
+      // Only members or admins can download documents
+      if (
+        req.user.role !== "admin" &&
+        !project.members.map((m) => String(m)).includes(req.user.userId)
+      ) {
+        return res
+          .status(403)
+          .json({ message: "Not authorized to download documents" });
+      }
+      const doc = project.documents.id(req.params.docId);
+      if (!doc) return res.status(404).json({ message: "Document not found" });
+      const filePath = path.join(__dirname, "../uploads", doc.filename);
+      res.download(filePath, doc.originalname);
+    } catch (err) {
+      res.status(500).json({ message: "Server error." });
     }
-    const doc = project.documents.id(req.params.docId);
-    if (!doc) return res.status(404).json({ message: "Document not found" });
-    const filePath = path.join(__dirname, "../uploads", doc.filename);
-    res.download(filePath, doc.originalname);
-  } catch (err) {
-    res.status(500).json({ message: "Server error." });
   }
-});
+);
 
 // Preview a document
-router.get("/:id/documents/:docId/preview", authMiddleware, async (req, res) => {
-  try {
-    const project = await Project.findById(req.params.id);
-    if (!project) return res.status(404).json({ message: "Project not found" });
-    // Only members or admins can preview documents
-    if (
-      req.user.role !== "admin" &&
-      !project.members.map(m => String(m)).includes(req.user.userId)
-    ) {
-      return res.status(403).json({ message: "Not authorized to preview documents" });
+router.get(
+  "/:id/documents/:docId/preview",
+  authMiddleware,
+  async (req, res) => {
+    try {
+      const project = await Project.findById(req.params.id);
+      if (!project)
+        return res.status(404).json({ message: "Project not found" });
+      // Only members or admins can preview documents
+      if (
+        req.user.role !== "admin" &&
+        !project.members.map((m) => String(m)).includes(req.user.userId)
+      ) {
+        return res
+          .status(403)
+          .json({ message: "Not authorized to preview documents" });
+      }
+      const doc = project.documents.id(req.params.docId);
+      if (!doc) return res.status(404).json({ message: "Document not found" });
+      const filePath = path.join(__dirname, "../uploads", doc.filename);
+
+      // Set appropriate headers for preview
+      res.setHeader("Content-Type", getContentType(doc.originalname));
+      res.setHeader(
+        "Content-Disposition",
+        'inline; filename="' + doc.originalname + '"'
+      );
+
+      // Stream the file
+      const fs = require("fs");
+      if (fs.existsSync(filePath)) {
+        const fileStream = fs.createReadStream(filePath);
+        fileStream.pipe(res);
+      } else {
+        res.status(404).json({ message: "File not found on server" });
+      }
+    } catch (err) {
+      res.status(500).json({ message: "Server error." });
     }
-    const doc = project.documents.id(req.params.docId);
-    if (!doc) return res.status(404).json({ message: "Document not found" });
-    const filePath = path.join(__dirname, "../uploads", doc.filename);
-    
-    // Set appropriate headers for preview
-    res.setHeader('Content-Type', getContentType(doc.originalname));
-    res.setHeader('Content-Disposition', 'inline; filename="' + doc.originalname + '"');
-    
-    // Stream the file
-    const fs = require('fs');
-    if (fs.existsSync(filePath)) {
-      const fileStream = fs.createReadStream(filePath);
-      fileStream.pipe(res);
-    } else {
-      res.status(404).json({ message: "File not found on server" });
-    }
-  } catch (err) {
-    res.status(500).json({ message: "Server error." });
   }
-});
+);
 
 // Remove a document
 router.delete("/:id/documents/:docId", authMiddleware, async (req, res) => {
   try {
     const project = await Project.findById(req.params.id);
     if (!project) return res.status(404).json({ message: "Project not found" });
-    
+
     // Only admins can remove documents
     if (req.user.role !== "admin") {
-      return res.status(403).json({ message: "Only admins can remove documents" });
+      return res
+        .status(403)
+        .json({ message: "Only admins can remove documents" });
     }
-    
+
     // Check if user is the project creator
     if (project.createdBy.toString() !== req.user.userId) {
-      return res.status(403).json({ message: "Not authorized to remove documents from this project" });
+      return res.status(403).json({
+        message: "Not authorized to remove documents from this project",
+      });
     }
-    
+
     const doc = project.documents.id(req.params.docId);
     if (!doc) return res.status(404).json({ message: "Document not found" });
-    
+
     // Remove file from filesystem
     const filePath = path.join(__dirname, "../uploads", doc.filename);
-    const fs = require('fs');
+    const fs = require("fs");
     if (fs.existsSync(filePath)) {
       fs.unlinkSync(filePath);
     }
-    
+
     // Remove document from project
     project.documents.pull(req.params.docId);
     await project.save();
-    
+
     res.json({ message: "Document removed successfully" });
   } catch (err) {
     console.error("Error removing document:", err);
@@ -596,22 +740,22 @@ router.delete("/:id/documents/:docId", authMiddleware, async (req, res) => {
 
 // Helper function to determine content type
 function getContentType(filename) {
-  const ext = filename.toLowerCase().split('.').pop();
+  const ext = filename.toLowerCase().split(".").pop();
   const contentTypes = {
-    'pdf': 'application/pdf',
-    'jpg': 'image/jpeg',
-    'jpeg': 'image/jpeg',
-    'png': 'image/png',
-    'gif': 'image/gif',
-    'txt': 'text/plain',
-    'doc': 'application/msword',
-    'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    'xls': 'application/vnd.ms-excel',
-    'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    'ppt': 'application/vnd.ms-powerpoint',
-    'pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+    pdf: "application/pdf",
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+    png: "image/png",
+    gif: "image/gif",
+    txt: "text/plain",
+    doc: "application/msword",
+    docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    xls: "application/vnd.ms-excel",
+    xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ppt: "application/vnd.ms-powerpoint",
+    pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
   };
-  return contentTypes[ext] || 'application/octet-stream';
+  return contentTypes[ext] || "application/octet-stream";
 }
 
 // Admin: Remove member from project
@@ -627,13 +771,19 @@ router.delete("/:id/members/:userId", authMiddleware, async (req, res) => {
     if (project.createdBy.toString() !== req.user.userId) {
       return res.status(403).json({ message: "Not your project." });
     }
-    
+
     const memberId = req.params.userId;
-    project.members = project.members.filter(m => m.toString() !== memberId);
+    project.members = project.members.filter((m) => m.toString() !== memberId);
     await project.save();
-    
-    const updatedProject = await Project.findById(req.params.id).populate("members", "name email role");
-    res.json({ message: "Member removed successfully.", project: updatedProject });
+
+    const updatedProject = await Project.findById(req.params.id).populate(
+      "members",
+      "name email role"
+    );
+    res.json({
+      message: "Member removed successfully.",
+      project: updatedProject,
+    });
   } catch (err) {
     res.status(500).json({ message: "Server error." });
   }
@@ -649,7 +799,7 @@ router.patch("/:id/members/:userId/role", authMiddleware, async (req, res) => {
     if (!["admin", "member"].includes(role)) {
       return res.status(400).json({ message: "Invalid role." });
     }
-    
+
     const project = await Project.findById(req.params.id);
     if (!project) {
       return res.status(404).json({ message: "Project not found." });
@@ -657,18 +807,18 @@ router.patch("/:id/members/:userId/role", authMiddleware, async (req, res) => {
     if (project.createdBy.toString() !== req.user.userId) {
       return res.status(403).json({ message: "Not your project." });
     }
-    
+
     // Update user role in User collection
     const user = await User.findByIdAndUpdate(
       req.params.userId,
       { role },
       { new: true }
     );
-    
+
     if (!user) {
       return res.status(404).json({ message: "User not found." });
     }
-    
+
     res.json({ message: "Role assigned successfully.", user });
   } catch (err) {
     res.status(500).json({ message: "Server error." });

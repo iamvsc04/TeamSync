@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from "react";
 import {
   Dialog,
   DialogTitle,
@@ -31,7 +31,7 @@ import {
   Card,
   CardContent,
   LinearProgress,
-} from '@mui/material';
+} from "@mui/material";
 import {
   Notifications as NotificationsIcon,
   Search as SearchIcon,
@@ -53,39 +53,43 @@ import {
   Description as DocumentIcon,
   Person as PersonIcon,
   Folder as ProjectIcon,
-} from '@mui/icons-material';
-import { useTheme } from '../ThemeContext';
+} from "@mui/icons-material";
+import { useTheme } from "../ThemeContext";
 
-const NotificationCenter = ({ 
-  open, 
-  onClose, 
-  notifications = [], 
+const NotificationCenter = ({
+  open,
+  onClose,
+  notifications = [],
   unreadNotifications = 0,
-  setUnreadNotifications 
+  setUnreadNotifications,
 }) => {
   const { theme } = useTheme();
   const [activeTab, setActiveTab] = useState(0);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [filterCategory, setFilterCategory] = useState('all');
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterCategory, setFilterCategory] = useState("all");
   const [selectedNotifications, setSelectedNotifications] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const [serverNotifications, setServerNotifications] = useState([]);
+  const [totalPages, setTotalPages] = useState(1);
   const [anchorEl, setAnchorEl] = useState(null);
   const [bulkActionAnchor, setBulkActionAnchor] = useState(null);
 
   const categories = [
-    { value: 'all', label: 'All', icon: <NotificationsIcon /> },
-    { value: 'tasks', label: 'Tasks', icon: <TaskIcon /> },
-    { value: 'meetings', label: 'Meetings', icon: <MeetingIcon /> },
-    { value: 'projects', label: 'Projects', icon: <ProjectIcon /> },
-    { value: 'documents', label: 'Documents', icon: <DocumentIcon /> },
-    { value: 'comments', label: 'Comments', icon: <InfoIcon /> },
-    { value: 'system', label: 'System', icon: <InfoIcon /> },
+    { value: "all", label: "All", icon: <NotificationsIcon /> },
+    { value: "tasks", label: "Tasks", icon: <TaskIcon /> },
+    { value: "meetings", label: "Meetings", icon: <MeetingIcon /> },
+    { value: "projects", label: "Projects", icon: <ProjectIcon /> },
+    { value: "documents", label: "Documents", icon: <DocumentIcon /> },
+    { value: "comments", label: "Comments", icon: <InfoIcon /> },
+    { value: "system", label: "System", icon: <InfoIcon /> },
   ];
 
   const priorityColors = {
-    high: '#f44336',
-    medium: '#ff9800',
-    low: '#4caf50',
+    high: "#f44336",
+    medium: "#ff9800",
+    low: "#4caf50",
   };
 
   const typeIcons = {
@@ -107,109 +111,169 @@ const NotificationCenter = ({
     system_announcement: <InfoIcon />,
   };
 
-  const filteredNotifications = notifications.filter(notification => {
-    const matchesSearch = notification.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         notification.message?.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesCategory = filterCategory === 'all' || notification.category === filterCategory;
-    const matchesTab = activeTab === 0 ? true : 
-                      activeTab === 1 ? !notification.isRead :
-                      activeTab === 2 ? notification.isArchived : false;
-    
+  const list = serverNotifications.length ? serverNotifications : notifications;
+  const filteredNotifications = list.filter((notification) => {
+    const matchesSearch =
+      notification.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      notification.message?.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesCategory =
+      filterCategory === "all" || notification.category === filterCategory;
+    const matchesTab =
+      activeTab === 0
+        ? true
+        : activeTab === 1
+        ? !notification.isRead
+        : activeTab === 2
+        ? notification.isArchived
+        : false;
+
     return matchesSearch && matchesCategory && matchesTab;
   });
 
+  const fetchNotifications = async () => {
+    try {
+      setLoading(true);
+      const token = localStorage.getItem("token");
+      const query = new URLSearchParams();
+      query.set("page", page);
+      query.set("limit", pageSize);
+      if (filterCategory !== "all") query.set("category", filterCategory);
+      if (activeTab === 1) query.set("unreadOnly", "true");
+      if (activeTab === 2) query.set("isArchived", "true");
+      const res = await fetch(
+        `http://localhost:5000/api/notifications?${query.toString()}`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+      if (res.ok) {
+        const data = await res.json();
+        setServerNotifications(data.notifications || []);
+        setTotalPages(data.pagination?.totalPages || 1);
+      }
+    } catch (e) {
+      // ignore
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (open) fetchNotifications();
+    // eslint-disable-next-line
+  }, [open, page, pageSize, filterCategory, activeTab]);
+
   const handleMarkAsRead = async (notificationId) => {
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5000/api/notifications/${notificationId}/mark-read`, {
-        method: 'PATCH',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-      
+      const token = localStorage.getItem("token");
+      const response = await fetch(
+        `http://localhost:5000/api/notifications/${notificationId}/read`,
+        {
+          method: "PATCH",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
       if (response.ok) {
         // Update local state
-        setUnreadNotifications(prev => Math.max(0, prev - 1));
+        setUnreadNotifications((prev) => Math.max(0, prev - 1));
       }
     } catch (error) {
-      console.error('Error marking notification as read:', error);
+      console.error("Error marking notification as read:", error);
     }
   };
 
   const handleArchive = async (notificationId) => {
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5000/api/notifications/${notificationId}/archive`, {
-        method: 'PATCH',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-      
+      const token = localStorage.getItem("token");
+      const response = await fetch(
+        `http://localhost:5000/api/notifications/${notificationId}/archive`,
+        {
+          method: "PATCH",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
       if (response.ok) {
         // Refresh notifications
         // You might want to add a callback to refresh the notifications list
       }
     } catch (error) {
-      console.error('Error archiving notification:', error);
+      console.error("Error archiving notification:", error);
     }
   };
 
   const handleDelete = async (notificationId) => {
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5000/api/notifications/${notificationId}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-      
+      const token = localStorage.getItem("token");
+      const response = await fetch(
+        `http://localhost:5000/api/notifications/${notificationId}`,
+        {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
       if (response.ok) {
         // Refresh notifications
         // You might want to add a callback to refresh the notifications list
       }
     } catch (error) {
-      console.error('Error deleting notification:', error);
+      console.error("Error deleting notification:", error);
     }
   };
 
   const handleBulkAction = async (action) => {
     if (selectedNotifications.length === 0) return;
-    
+
     setLoading(true);
     try {
-      const token = localStorage.getItem('token');
-      
+      const token = localStorage.getItem("token");
+
       for (const notificationId of selectedNotifications) {
-        const endpoint = action === 'mark-read' ? 'mark-read' : 
-                        action === 'archive' ? 'archive' : '';
-        
+        const endpoint =
+          action === "mark-read"
+            ? "mark-read"
+            : action === "archive"
+            ? "archive"
+            : "";
+
         if (endpoint) {
-          await fetch(`http://localhost:5000/api/notifications/${notificationId}/${endpoint}`, {
-            method: 'PATCH',
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json',
-            },
-          });
-        } else if (action === 'delete') {
-          await fetch(`http://localhost:5000/api/notifications/${notificationId}`, {
-            method: 'DELETE',
-            headers: {
-              'Authorization': `Bearer ${token}`,
-            },
-          });
+          await fetch(
+            `http://localhost:5000/api/notifications/${notificationId}/${endpoint}`,
+            {
+              method: "PATCH",
+              headers: {
+                Authorization: `Bearer ${token}`,
+                "Content-Type": "application/json",
+              },
+            }
+          );
+        } else if (action === "delete") {
+          await fetch(
+            `http://localhost:5000/api/notifications/${notificationId}`,
+            {
+              method: "DELETE",
+              headers: {
+                Authorization: `Bearer ${token}`,
+              },
+            }
+          );
         }
       }
-      
+
       setSelectedNotifications([]);
       setBulkActionAnchor(null);
     } catch (error) {
-      console.error('Error performing bulk action:', error);
+      console.error("Error performing bulk action:", error);
     } finally {
       setLoading(false);
     }
@@ -221,8 +285,8 @@ const NotificationCenter = ({
     const minutes = Math.floor(diff / 60000);
     const hours = Math.floor(diff / 3600000);
     const days = Math.floor(diff / 86400000);
-    
-    if (minutes < 1) return 'Just now';
+
+    if (minutes < 1) return "Just now";
     if (minutes < 60) return `${minutes}m ago`;
     if (hours < 24) return `${hours}h ago`;
     return `${days}d ago`;
@@ -236,23 +300,30 @@ const NotificationCenter = ({
       fullWidth
       PaperProps={{
         sx: {
-          bgcolor: theme === 'dark' ? '#1a1a1a' : '#fff',
-          color: theme === 'dark' ? '#fff' : '#333',
-          minHeight: '70vh',
-        }
+          bgcolor: theme === "dark" ? "#1a1a1a" : "#fff",
+          color: theme === "dark" ? "#fff" : "#333",
+          minHeight: "70vh",
+        },
       }}
     >
-      <DialogTitle sx={{ 
-        display: 'flex', 
-        alignItems: 'center', 
-        justifyContent: 'space-between',
-        borderBottom: `1px solid ${theme === 'dark' ? '#333' : '#e0e0e0'}`,
-        pb: 2,
-        color: theme === 'dark' ? '#fff' : '#333',
-      }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <NotificationsIcon sx={{ color: theme === 'dark' ? '#fff' : '#333' }} />
-          <Typography variant="h6" sx={{ color: theme === 'dark' ? '#fff' : '#333' }}>
+      <DialogTitle
+        sx={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          borderBottom: `1px solid ${theme === "dark" ? "#333" : "#e0e0e0"}`,
+          pb: 2,
+          color: theme === "dark" ? "#fff" : "#333",
+        }}
+      >
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+          <NotificationsIcon
+            sx={{ color: theme === "dark" ? "#fff" : "#333" }}
+          />
+          <Typography
+            variant="h6"
+            sx={{ color: theme === "dark" ? "#fff" : "#333" }}
+          >
             Notification Center
           </Typography>
           {unreadNotifications > 0 && (
@@ -261,12 +332,12 @@ const NotificationCenter = ({
             </Badge>
           )}
         </Box>
-        <Box sx={{ display: 'flex', gap: 1 }}>
+        <Box sx={{ display: "flex", gap: 1 }}>
           <Tooltip title="Bulk Actions">
             <IconButton
               onClick={(e) => setBulkActionAnchor(e.currentTarget)}
               disabled={selectedNotifications.length === 0}
-              sx={{ color: theme === 'dark' ? '#fff' : '#333' }}
+              sx={{ color: theme === "dark" ? "#fff" : "#333" }}
             >
               <MoreIcon />
             </IconButton>
@@ -277,32 +348,55 @@ const NotificationCenter = ({
             onClose={() => setBulkActionAnchor(null)}
             PaperProps={{
               sx: {
-                bgcolor: theme === 'dark' ? '#333' : '#fff',
-                color: theme === 'dark' ? '#fff' : '#333',
-              }
+                bgcolor: theme === "dark" ? "#333" : "#fff",
+                color: theme === "dark" ? "#fff" : "#333",
+              },
             }}
           >
-            <MenuItem onClick={() => handleBulkAction('mark-read')} sx={{ color: theme === 'dark' ? '#fff' : '#333' }}>
-              <MarkReadIcon sx={{ mr: 1, color: theme === 'dark' ? '#fff' : '#333' }} />
+            <MenuItem
+              onClick={() => handleBulkAction("mark-read")}
+              sx={{ color: theme === "dark" ? "#fff" : "#333" }}
+            >
+              <MarkReadIcon
+                sx={{ mr: 1, color: theme === "dark" ? "#fff" : "#333" }}
+              />
               Mark as Read
             </MenuItem>
-            <MenuItem onClick={() => handleBulkAction('archive')} sx={{ color: theme === 'dark' ? '#fff' : '#333' }}>
-              <ArchiveIcon sx={{ mr: 1, color: theme === 'dark' ? '#fff' : '#333' }} />
+            <MenuItem
+              onClick={() => handleBulkAction("archive")}
+              sx={{ color: theme === "dark" ? "#fff" : "#333" }}
+            >
+              <ArchiveIcon
+                sx={{ mr: 1, color: theme === "dark" ? "#fff" : "#333" }}
+              />
               Archive
             </MenuItem>
-            <MenuItem onClick={() => handleBulkAction('delete')} sx={{ color: theme === 'dark' ? '#fff' : '#333' }}>
-              <DeleteIcon sx={{ mr: 1, color: theme === 'dark' ? '#fff' : '#333' }} />
+            <MenuItem
+              onClick={() => handleBulkAction("delete")}
+              sx={{ color: theme === "dark" ? "#fff" : "#333" }}
+            >
+              <DeleteIcon
+                sx={{ mr: 1, color: theme === "dark" ? "#fff" : "#333" }}
+              />
               Delete
             </MenuItem>
           </Menu>
-          <IconButton onClick={onClose} sx={{ color: theme === 'dark' ? '#fff' : '#333' }}>
+          <IconButton
+            onClick={onClose}
+            sx={{ color: theme === "dark" ? "#fff" : "#333" }}
+          >
             <MoreIcon />
           </IconButton>
         </Box>
       </DialogTitle>
 
       <DialogContent sx={{ p: 0 }}>
-        <Box sx={{ p: 2, borderBottom: `1px solid ${theme === 'dark' ? '#333' : '#e0e0e0'}` }}>
+        <Box
+          sx={{
+            p: 2,
+            borderBottom: `1px solid ${theme === "dark" ? "#333" : "#e0e0e0"}`,
+          }}
+        >
           <Grid container spacing={2} alignItems="center">
             <Grid item xs={12} md={6}>
               <TextField
@@ -313,29 +407,31 @@ const NotificationCenter = ({
                 InputProps={{
                   startAdornment: (
                     <InputAdornment position="start">
-                      <SearchIcon sx={{ color: theme === 'dark' ? '#fff' : '#333' }} />
+                      <SearchIcon
+                        sx={{ color: theme === "dark" ? "#fff" : "#333" }}
+                      />
                     </InputAdornment>
                   ),
                 }}
                 size="small"
                 sx={{
-                  '& .MuiOutlinedInput-root': {
-                    color: theme === 'dark' ? '#fff' : '#333',
-                    '& fieldset': {
-                      borderColor: theme === 'dark' ? '#555' : '#ccc',
+                  "& .MuiOutlinedInput-root": {
+                    color: theme === "dark" ? "#fff" : "#333",
+                    "& fieldset": {
+                      borderColor: theme === "dark" ? "#555" : "#ccc",
                     },
-                    '&:hover fieldset': {
-                      borderColor: theme === 'dark' ? '#777' : '#999',
+                    "&:hover fieldset": {
+                      borderColor: theme === "dark" ? "#777" : "#999",
                     },
-                    '&.Mui-focused fieldset': {
-                      borderColor: theme === 'dark' ? '#1976d2' : '#1976d2',
+                    "&.Mui-focused fieldset": {
+                      borderColor: theme === "dark" ? "#1976d2" : "#1976d2",
                     },
                   },
-                  '& .MuiInputLabel-root': {
-                    color: theme === 'dark' ? '#ccc' : '#666',
+                  "& .MuiInputLabel-root": {
+                    color: theme === "dark" ? "#ccc" : "#666",
                   },
-                  '& .MuiInputBase-input::placeholder': {
-                    color: theme === 'dark' ? '#ccc' : '#999',
+                  "& .MuiInputBase-input::placeholder": {
+                    color: theme === "dark" ? "#ccc" : "#999",
                     opacity: 1,
                   },
                 }}
@@ -343,39 +439,47 @@ const NotificationCenter = ({
             </Grid>
             <Grid item xs={12} md={6}>
               <FormControl fullWidth size="small">
-                <InputLabel sx={{ color: theme === 'dark' ? '#ccc' : '#666' }}>Category</InputLabel>
+                <InputLabel sx={{ color: theme === "dark" ? "#ccc" : "#666" }}>
+                  Category
+                </InputLabel>
                 <Select
                   value={filterCategory}
                   onChange={(e) => setFilterCategory(e.target.value)}
                   label="Category"
                   sx={{
-                    color: theme === 'dark' ? '#fff' : '#333',
-                    '& .MuiOutlinedInput-notchedOutline': {
-                      borderColor: theme === 'dark' ? '#555' : '#ccc',
+                    color: theme === "dark" ? "#fff" : "#333",
+                    "& .MuiOutlinedInput-notchedOutline": {
+                      borderColor: theme === "dark" ? "#555" : "#ccc",
                     },
-                    '&:hover .MuiOutlinedInput-notchedOutline': {
-                      borderColor: theme === 'dark' ? '#777' : '#999',
+                    "&:hover .MuiOutlinedInput-notchedOutline": {
+                      borderColor: theme === "dark" ? "#777" : "#999",
                     },
-                    '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                      borderColor: theme === 'dark' ? '#1976d2' : '#1976d2',
+                    "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
+                      borderColor: theme === "dark" ? "#1976d2" : "#1976d2",
                     },
-                    '& .MuiSvgIcon-root': {
-                      color: theme === 'dark' ? '#fff' : '#333',
+                    "& .MuiSvgIcon-root": {
+                      color: theme === "dark" ? "#fff" : "#333",
                     },
                   }}
                   MenuProps={{
                     PaperProps: {
                       sx: {
-                        bgcolor: theme === 'dark' ? '#333' : '#fff',
-                        color: theme === 'dark' ? '#fff' : '#333',
-                      }
-                    }
+                        bgcolor: theme === "dark" ? "#333" : "#fff",
+                        color: theme === "dark" ? "#fff" : "#333",
+                      },
+                    },
                   }}
                 >
                   {categories.map((category) => (
-                    <MenuItem key={category.value} value={category.value} sx={{ color: theme === 'dark' ? '#fff' : '#333' }}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Box sx={{ color: theme === 'dark' ? '#fff' : '#333' }}>
+                    <MenuItem
+                      key={category.value}
+                      value={category.value}
+                      sx={{ color: theme === "dark" ? "#fff" : "#333" }}
+                    >
+                      <Box
+                        sx={{ display: "flex", alignItems: "center", gap: 1 }}
+                      >
+                        <Box sx={{ color: theme === "dark" ? "#fff" : "#333" }}>
                           {category.icon}
                         </Box>
                         {category.label}
@@ -391,16 +495,16 @@ const NotificationCenter = ({
         <Tabs
           value={activeTab}
           onChange={(e, newValue) => setActiveTab(newValue)}
-          sx={{ 
-            borderBottom: `1px solid ${theme === 'dark' ? '#333' : '#e0e0e0'}`,
-            '& .MuiTab-root': {
-              color: theme === 'dark' ? '#ccc' : '#666',
-              '&.Mui-selected': {
-                color: theme === 'dark' ? '#fff' : '#333',
+          sx={{
+            borderBottom: `1px solid ${theme === "dark" ? "#333" : "#e0e0e0"}`,
+            "& .MuiTab-root": {
+              color: theme === "dark" ? "#ccc" : "#666",
+              "&.Mui-selected": {
+                color: theme === "dark" ? "#fff" : "#333",
               },
             },
-            '& .MuiTabs-indicator': {
-              backgroundColor: theme === 'dark' ? '#1976d2' : '#1976d2',
+            "& .MuiTabs-indicator": {
+              backgroundColor: theme === "dark" ? "#1976d2" : "#1976d2",
             },
           }}
         >
@@ -411,21 +515,29 @@ const NotificationCenter = ({
 
         {loading && <LinearProgress />}
 
-        <Box sx={{ maxHeight: '400px', overflowY: 'auto' }}>
+        <Box sx={{ maxHeight: "400px", overflowY: "auto" }}>
           {filteredNotifications.length === 0 ? (
-            <Box sx={{ p: 3, textAlign: 'center' }}>
-              <NotificationsIcon sx={{ 
-                fontSize: 48, 
-                color: theme === 'dark' ? '#666' : '#999', 
-                mb: 2 
-              }} />
-              <Typography variant="h6" sx={{ color: theme === 'dark' ? '#ccc' : '#666' }}>
+            <Box sx={{ p: 3, textAlign: "center" }}>
+              <NotificationsIcon
+                sx={{
+                  fontSize: 48,
+                  color: theme === "dark" ? "#666" : "#999",
+                  mb: 2,
+                }}
+              />
+              <Typography
+                variant="h6"
+                sx={{ color: theme === "dark" ? "#ccc" : "#666" }}
+              >
                 No notifications found
               </Typography>
-              <Typography variant="body2" sx={{ color: theme === 'dark' ? '#999' : '#888' }}>
-                {searchQuery || filterCategory !== 'all' 
-                  ? 'Try adjusting your search or filters'
-                  : 'You\'re all caught up!'}
+              <Typography
+                variant="body2"
+                sx={{ color: theme === "dark" ? "#999" : "#888" }}
+              >
+                {searchQuery || filterCategory !== "all"
+                  ? "Try adjusting your search or filters"
+                  : "You're all caught up!"}
               </Typography>
             </Box>
           ) : (
@@ -434,33 +546,51 @@ const NotificationCenter = ({
                 <ListItem
                   key={notification._id}
                   sx={{
-                    borderBottom: `1px solid ${theme === 'dark' ? '#333' : '#f0f0f0'}`,
-                    bgcolor: notification.isRead 
-                      ? 'transparent' 
-                      : theme === 'dark' ? 'rgba(25, 118, 210, 0.1)' : 'rgba(25, 118, 210, 0.05)',
-                    '&:hover': {
-                      bgcolor: theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.02)',
+                    borderBottom: `1px solid ${
+                      theme === "dark" ? "#333" : "#f0f0f0"
+                    }`,
+                    bgcolor: notification.isRead
+                      ? "transparent"
+                      : theme === "dark"
+                      ? "rgba(25, 118, 210, 0.1)"
+                      : "rgba(25, 118, 210, 0.05)",
+                    "&:hover": {
+                      bgcolor:
+                        theme === "dark"
+                          ? "rgba(255, 255, 255, 0.05)"
+                          : "rgba(0, 0, 0, 0.02)",
                     },
                   }}
                 >
                   <ListItemIcon>
-                    <Box sx={{ 
-                      color: typeIcons[notification.type] ? 'primary.main' : 'text.secondary',
-                      display: 'flex',
-                      alignItems: 'center'
-                    }}>
+                    <Box
+                      sx={{
+                        color: typeIcons[notification.type]
+                          ? "primary.main"
+                          : "text.secondary",
+                        display: "flex",
+                        alignItems: "center",
+                      }}
+                    >
                       {typeIcons[notification.type] || <NotificationsIcon />}
                     </Box>
                   </ListItemIcon>
-                  
+
                   <ListItemText
                     primary={
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+                      <Box
+                        sx={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 1,
+                          mb: 0.5,
+                        }}
+                      >
                         <Typography
                           variant="body1"
                           sx={{
                             fontWeight: notification.isRead ? 400 : 600,
-                            color: theme === 'dark' ? '#fff' : '#333',
+                            color: theme === "dark" ? "#fff" : "#333",
                           }}
                         >
                           {notification.title}
@@ -471,8 +601,8 @@ const NotificationCenter = ({
                             size="small"
                             sx={{
                               bgcolor: priorityColors[notification.priority],
-                              color: 'white',
-                              fontSize: '0.7rem',
+                              color: "white",
+                              fontSize: "0.7rem",
                             }}
                           />
                         )}
@@ -483,16 +613,18 @@ const NotificationCenter = ({
                         <Typography
                           variant="body2"
                           sx={{
-                            color: theme === 'dark' ? '#ccc' : '#666',
+                            color: theme === "dark" ? "#ccc" : "#666",
                             mb: 1,
                           }}
                         >
                           {notification.message}
                         </Typography>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Box
+                          sx={{ display: "flex", alignItems: "center", gap: 1 }}
+                        >
                           <Typography
                             variant="caption"
-                            sx={{ color: theme === 'dark' ? '#999' : '#888' }}
+                            sx={{ color: theme === "dark" ? "#999" : "#888" }}
                           >
                             {formatTimeAgo(notification.createdAt)}
                           </Typography>
@@ -501,15 +633,15 @@ const NotificationCenter = ({
                               label={notification.category}
                               size="small"
                               variant="outlined"
-                              sx={{ fontSize: '0.7rem' }}
+                              sx={{ fontSize: "0.7rem" }}
                             />
                           )}
                         </Box>
                       </Box>
                     }
                   />
-                  
-                  <Box sx={{ display: 'flex', gap: 0.5 }}>
+
+                  <Box sx={{ display: "flex", gap: 0.5 }}>
                     {!notification.isRead && (
                       <Tooltip title="Mark as Read">
                         <IconButton
@@ -544,13 +676,42 @@ const NotificationCenter = ({
         </Box>
       </DialogContent>
 
-      <DialogActions sx={{ p: 2, borderTop: `1px solid ${theme === 'dark' ? '#333' : '#e0e0e0'}` }}>
-        <Button 
+      <DialogActions
+        sx={{
+          p: 2,
+          borderTop: `1px solid ${theme === "dark" ? "#333" : "#e0e0e0"}`,
+        }}
+      >
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1, mr: "auto" }}>
+          <Button
+            variant="outlined"
+            size="small"
+            disabled={page <= 1 || loading}
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+          >
+            Prev
+          </Button>
+          <Typography variant="caption">
+            Page {page} / {totalPages}
+          </Typography>
+          <Button
+            variant="outlined"
+            size="small"
+            disabled={page >= totalPages || loading}
+            onClick={() => setPage((p) => p + 1)}
+          >
+            Next
+          </Button>
+        </Box>
+        <Button
           onClick={onClose}
-          sx={{ 
-            color: theme === 'dark' ? '#fff' : '#333',
-            '&:hover': {
-              bgcolor: theme === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
+          sx={{
+            color: theme === "dark" ? "#fff" : "#333",
+            "&:hover": {
+              bgcolor:
+                theme === "dark"
+                  ? "rgba(255, 255, 255, 0.1)"
+                  : "rgba(0, 0, 0, 0.1)",
             },
           }}
         >
@@ -561,4 +722,4 @@ const NotificationCenter = ({
   );
 };
 
-export default NotificationCenter; 
+export default NotificationCenter;

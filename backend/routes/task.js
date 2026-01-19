@@ -19,7 +19,10 @@ const storage = multer.diskStorage({
   },
   filename: function (req, file, cb) {
     const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-    cb(null, file.fieldname + "-" + uniqueSuffix + path.extname(file.originalname));
+    cb(
+      null,
+      file.fieldname + "-" + uniqueSuffix + path.extname(file.originalname)
+    );
   },
 });
 
@@ -45,7 +48,7 @@ router.get("/project/:projectId", authMiddleware, async (req, res) => {
   try {
     console.log("Fetching tasks for project:", req.params.projectId);
     console.log("User:", req.user);
-    
+
     const project = await Project.findById(req.params.projectId);
     if (!project) {
       return res.status(404).json({ message: "Project not found" });
@@ -56,10 +59,17 @@ router.get("/project/:projectId", authMiddleware, async (req, res) => {
 
     // Check if user is member or admin
     const isAdmin = req.user.role === "admin";
-    const isProjectMember = project.members.map(m => String(m)).includes(req.user.userId);
+    const isProjectMember = project.members
+      .map((m) => String(m))
+      .includes(req.user.userId);
     const isProjectCreator = String(project.createdBy) === req.user.userId;
 
-    console.log("Authorization check:", { isAdmin, isProjectMember, isProjectCreator, userId: req.user.userId });
+    console.log("Authorization check:", {
+      isAdmin,
+      isProjectMember,
+      isProjectCreator,
+      userId: req.user.userId,
+    });
 
     if (!isAdmin && !isProjectMember && !isProjectCreator) {
       return res.status(403).json({ message: "Not authorized to view tasks" });
@@ -70,7 +80,7 @@ router.get("/project/:projectId", authMiddleware, async (req, res) => {
     if (!isAdmin && !isProjectCreator) {
       query.$or = [
         { assignedTo: req.user.userId },
-        { createdBy: req.user.userId }
+        { createdBy: req.user.userId },
       ];
     }
 
@@ -111,41 +121,54 @@ router.get("/my-tasks", authMiddleware, async (req, res) => {
 });
 
 // Get tasks assigned to a specific user in a project
-router.get("/project/:projectId/user/:userId", authMiddleware, async (req, res) => {
-  try {
-    const project = await Project.findById(req.params.projectId);
-    if (!project) {
-      return res.status(404).json({ message: "Project not found" });
+router.get(
+  "/project/:projectId/user/:userId",
+  authMiddleware,
+  async (req, res) => {
+    try {
+      const project = await Project.findById(req.params.projectId);
+      if (!project) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+
+      // Check authorization
+      const isAdmin = req.user.role === "admin";
+      const isProjectCreator = String(project.createdBy) === req.user.userId;
+      const isRequestedUser = req.params.userId === req.user.userId;
+      const isProjectMember = project.members
+        .map((m) => String(m))
+        .includes(req.user.userId);
+
+      if (
+        !isAdmin &&
+        !isProjectCreator &&
+        !isRequestedUser &&
+        !isProjectMember
+      ) {
+        return res
+          .status(403)
+          .json({ message: "Not authorized to view these tasks" });
+      }
+
+      const tasks = await Task.find({
+        project: req.params.projectId,
+        assignedTo: req.params.userId,
+      })
+        .populate("assignedTo", "name email")
+        .populate("createdBy", "name email")
+        .populate("dependencies", "title status")
+        .populate("comments.author", "name email")
+        .populate("attachments.uploader", "name email")
+        .populate("timeEntries.user", "name email")
+        .sort({ priority: -1, dueDate: 1, createdAt: -1 });
+
+      res.json(tasks);
+    } catch (err) {
+      console.error("Error fetching user tasks:", err);
+      res.status(500).json({ message: "Server error" });
     }
-
-    // Check authorization
-    const isAdmin = req.user.role === "admin";
-    const isProjectCreator = String(project.createdBy) === req.user.userId;
-    const isRequestedUser = req.params.userId === req.user.userId;
-    const isProjectMember = project.members.map(m => String(m)).includes(req.user.userId);
-
-    if (!isAdmin && !isProjectCreator && !isRequestedUser && !isProjectMember) {
-      return res.status(403).json({ message: "Not authorized to view these tasks" });
-    }
-
-    const tasks = await Task.find({ 
-      project: req.params.projectId, 
-      assignedTo: req.params.userId 
-    })
-      .populate("assignedTo", "name email")
-      .populate("createdBy", "name email")
-      .populate("dependencies", "title status")
-      .populate("comments.author", "name email")
-      .populate("attachments.uploader", "name email")
-      .populate("timeEntries.user", "name email")
-      .sort({ priority: -1, dueDate: 1, createdAt: -1 });
-
-    res.json(tasks);
-  } catch (err) {
-    console.error("Error fetching user tasks:", err);
-    res.status(500).json({ message: "Server error" });
   }
-});
+);
 
 // Get task by ID
 router.get("/:id", authMiddleware, async (req, res) => {
@@ -168,9 +191,11 @@ router.get("/:id", authMiddleware, async (req, res) => {
     const project = task.project;
     if (
       req.user.role !== "admin" &&
-      !project.members.map(m => String(m)).includes(req.user.userId)
+      !project.members.map((m) => String(m)).includes(req.user.userId)
     ) {
-      return res.status(403).json({ message: "Not authorized to view this task" });
+      return res
+        .status(403)
+        .json({ message: "Not authorized to view this task" });
     }
 
     res.json(task);
@@ -182,9 +207,24 @@ router.get("/:id", authMiddleware, async (req, res) => {
 // Create new task
 router.post("/", authMiddleware, async (req, res) => {
   try {
-    const { title, description, project, assignedTo, priority, dueDate, estimatedHours, tags, dependencies } = req.body;
-    
-    console.log("Creating task:", { title, project, assignedTo, createdBy: req.user.userId });
+    const {
+      title,
+      description,
+      project,
+      assignedTo,
+      priority,
+      dueDate,
+      estimatedHours,
+      tags,
+      dependencies,
+    } = req.body;
+
+    console.log("Creating task:", {
+      title,
+      project,
+      assignedTo,
+      createdBy: req.user.userId,
+    });
 
     // Validate project exists and user has access
     const projectDoc = await Project.findById(project);
@@ -197,9 +237,11 @@ router.post("/", authMiddleware, async (req, res) => {
 
     if (
       req.user.role !== "admin" &&
-      !projectDoc.members.map(m => String(m)).includes(req.user.userId)
+      !projectDoc.members.map((m) => String(m)).includes(req.user.userId)
     ) {
-      return res.status(403).json({ message: "Not authorized to create tasks in this project" });
+      return res
+        .status(403)
+        .json({ message: "Not authorized to create tasks in this project" });
     }
 
     // Validate assigned user exists and is project member
@@ -208,8 +250,10 @@ router.post("/", authMiddleware, async (req, res) => {
       if (!assignedUser) {
         return res.status(404).json({ message: "Assigned user not found" });
       }
-      if (!projectDoc.members.map(m => String(m)).includes(assignedTo)) {
-        return res.status(400).json({ message: "Assigned user is not a project member" });
+      if (!projectDoc.members.map((m) => String(m)).includes(assignedTo)) {
+        return res
+          .status(400)
+          .json({ message: "Assigned user is not a project member" });
       }
     }
 
@@ -228,7 +272,19 @@ router.post("/", authMiddleware, async (req, res) => {
 
     await task.save();
     console.log("Task created successfully:", task._id);
-    
+    // Emit realtime event to project room
+    try {
+      const io = req.app.get("io");
+      if (io) {
+        io.to(`project_${project}`).emit("taskCreated", {
+          taskId: String(task._id),
+          projectId: String(project),
+        });
+      }
+    } catch (e) {
+      console.error("Socket emit error (taskCreated):", e);
+    }
+
     const populatedTask = await Task.findById(task._id)
       .populate("assignedTo", "name email")
       .populate("createdBy", "name email")
@@ -244,7 +300,10 @@ router.post("/", authMiddleware, async (req, res) => {
 // Update task
 router.put("/:id", authMiddleware, async (req, res) => {
   try {
-    const task = await Task.findById(req.params.id).populate("project", "members");
+    const task = await Task.findById(req.params.id).populate(
+      "project",
+      "members"
+    );
     if (!task) {
       return res.status(404).json({ message: "Task not found" });
     }
@@ -253,15 +312,34 @@ router.put("/:id", authMiddleware, async (req, res) => {
     const isAdmin = req.user.role === "admin";
     const isProjectCreator = String(task.project.createdBy) === req.user.userId;
     const isAssignedToTask = String(task.assignedTo) === req.user.userId;
-    const isProjectMember = task.project.members.map(m => String(m)).includes(req.user.userId);
+    const isProjectMember = task.project.members
+      .map((m) => String(m))
+      .includes(req.user.userId);
 
-    if (!isAdmin && !isProjectCreator && !isAssignedToTask && !isProjectMember) {
-      return res.status(403).json({ message: "Not authorized to update this task" });
+    if (
+      !isAdmin &&
+      !isProjectCreator &&
+      !isAssignedToTask &&
+      !isProjectMember
+    ) {
+      return res
+        .status(403)
+        .json({ message: "Not authorized to update this task" });
     }
 
     // Update fields
-    const updateFields = ["title", "description", "status", "priority", "dueDate", "estimatedHours", "progress", "tags"];
-    updateFields.forEach(field => {
+    const updateFields = [
+      "title",
+      "description",
+      "status",
+      "priority",
+      "dueDate",
+      "estimatedHours",
+      "progress",
+      "tags",
+      "dependencies",
+    ];
+    updateFields.forEach((field) => {
       if (req.body[field] !== undefined) {
         task[field] = req.body[field];
       }
@@ -276,7 +354,22 @@ router.put("/:id", authMiddleware, async (req, res) => {
     }
 
     await task.save();
-    
+    // Emit realtime event
+    try {
+      const io = req.app.get("io");
+      if (io) {
+        io.to(`project_${task.project._id || task.project}`).emit(
+          "taskUpdated",
+          {
+            taskId: String(task._id),
+            projectId: String(task.project._id || task.project),
+          }
+        );
+      }
+    } catch (e) {
+      console.error("Socket emit error (taskUpdated):", e);
+    }
+
     const updatedTask = await Task.findById(task._id)
       .populate("assignedTo", "name email")
       .populate("createdBy", "name email")
@@ -292,7 +385,10 @@ router.put("/:id", authMiddleware, async (req, res) => {
 // Delete task
 router.delete("/:id", authMiddleware, async (req, res) => {
   try {
-    const task = await Task.findById(req.params.id).populate("project", "members createdBy");
+    const task = await Task.findById(req.params.id).populate(
+      "project",
+      "members createdBy"
+    );
     if (!task) {
       return res.status(404).json({ message: "Task not found" });
     }
@@ -303,7 +399,9 @@ router.delete("/:id", authMiddleware, async (req, res) => {
       req.user.role !== "admin" &&
       project.createdBy.toString() !== req.user.userId
     ) {
-      return res.status(403).json({ message: "Not authorized to delete this task" });
+      return res
+        .status(403)
+        .json({ message: "Not authorized to delete this task" });
     }
 
     // Remove task from dependencies of other tasks
@@ -319,6 +417,18 @@ router.delete("/:id", authMiddleware, async (req, res) => {
     );
 
     await Task.findByIdAndDelete(req.params.id);
+    // Emit realtime event
+    try {
+      const io = req.app.get("io");
+      if (io) {
+        io.to(`project_${project._id || project}`).emit("taskDeleted", {
+          taskId: String(req.params.id),
+          projectId: String(project._id || project),
+        });
+      }
+    } catch (e) {
+      console.error("Socket emit error (taskDeleted):", e);
+    }
     res.json({ message: "Task deleted successfully" });
   } catch (err) {
     res.status(500).json({ message: "Server error" });
@@ -329,8 +439,11 @@ router.delete("/:id", authMiddleware, async (req, res) => {
 router.post("/:id/comments", authMiddleware, async (req, res) => {
   try {
     const { text } = req.body;
-    const task = await Task.findById(req.params.id).populate("project", "members");
-    
+    const task = await Task.findById(req.params.id).populate(
+      "project",
+      "members"
+    );
+
     if (!task) {
       return res.status(404).json({ message: "Task not found" });
     }
@@ -339,9 +452,11 @@ router.post("/:id/comments", authMiddleware, async (req, res) => {
     const project = task.project;
     if (
       req.user.role !== "admin" &&
-      !project.members.map(m => String(m)).includes(req.user.userId)
+      !project.members.map((m) => String(m)).includes(req.user.userId)
     ) {
-      return res.status(403).json({ message: "Not authorized to comment on this task" });
+      return res
+        .status(403)
+        .json({ message: "Not authorized to comment on this task" });
     }
 
     task.comments.push({
@@ -350,9 +465,11 @@ router.post("/:id/comments", authMiddleware, async (req, res) => {
     });
 
     await task.save();
-    
-    const updatedTask = await Task.findById(task._id)
-      .populate("comments.author", "name email");
+
+    const updatedTask = await Task.findById(task._id).populate(
+      "comments.author",
+      "name email"
+    );
 
     res.json(updatedTask.comments[updatedTask.comments.length - 1]);
   } catch (err) {
@@ -365,7 +482,7 @@ router.put("/:id/comments/:commentId", authMiddleware, async (req, res) => {
   try {
     const { text } = req.body;
     const task = await Task.findById(req.params.id);
-    
+
     if (!task) {
       return res.status(404).json({ message: "Task not found" });
     }
@@ -377,7 +494,9 @@ router.put("/:id/comments/:commentId", authMiddleware, async (req, res) => {
 
     // Only comment author can edit
     if (comment.author.toString() !== req.user.userId) {
-      return res.status(403).json({ message: "Not authorized to edit this comment" });
+      return res
+        .status(403)
+        .json({ message: "Not authorized to edit this comment" });
     }
 
     comment.text = text;
@@ -394,7 +513,7 @@ router.put("/:id/comments/:commentId", authMiddleware, async (req, res) => {
 router.delete("/:id/comments/:commentId", authMiddleware, async (req, res) => {
   try {
     const task = await Task.findById(req.params.id);
-    
+
     if (!task) {
       return res.status(404).json({ message: "Task not found" });
     }
@@ -409,7 +528,9 @@ router.delete("/:id/comments/:commentId", authMiddleware, async (req, res) => {
       req.user.role !== "admin" &&
       comment.author.toString() !== req.user.userId
     ) {
-      return res.status(403).json({ message: "Not authorized to delete this comment" });
+      return res
+        .status(403)
+        .json({ message: "Not authorized to delete this comment" });
     }
 
     task.comments.pull(req.params.commentId);
@@ -422,80 +543,108 @@ router.delete("/:id/comments/:commentId", authMiddleware, async (req, res) => {
 });
 
 // Upload attachment to task
-router.post("/:id/attachments", authMiddleware, upload.single("file"), async (req, res) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({ message: "No file uploaded" });
+router.post(
+  "/:id/attachments",
+  authMiddleware,
+  upload.single("file"),
+  async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ message: "No file uploaded" });
+      }
+
+      const task = await Task.findById(req.params.id).populate(
+        "project",
+        "members"
+      );
+      if (!task) {
+        return res.status(404).json({ message: "Task not found" });
+      }
+
+      // Check authorization
+      const project = task.project;
+      if (
+        req.user.role !== "admin" &&
+        !project.members.map((m) => String(m)).includes(req.user.userId)
+      ) {
+        return res.status(403).json({
+          message: "Not authorized to upload attachments to this task",
+        });
+      }
+
+      task.attachments.push({
+        filename: req.file.filename,
+        originalname: req.file.originalname,
+        uploader: req.user.userId,
+      });
+
+      await task.save();
+
+      const updatedTask = await Task.findById(task._id).populate(
+        "attachments.uploader",
+        "name email"
+      );
+
+      res.json(updatedTask.attachments[updatedTask.attachments.length - 1]);
+    } catch (err) {
+      res.status(500).json({ message: "Server error" });
     }
-
-    const task = await Task.findById(req.params.id).populate("project", "members");
-    if (!task) {
-      return res.status(404).json({ message: "Task not found" });
-    }
-
-    // Check authorization
-    const project = task.project;
-    if (
-      req.user.role !== "admin" &&
-      !project.members.map(m => String(m)).includes(req.user.userId)
-    ) {
-      return res.status(403).json({ message: "Not authorized to upload attachments to this task" });
-    }
-
-    task.attachments.push({
-      filename: req.file.filename,
-      originalname: req.file.originalname,
-      uploader: req.user.userId,
-    });
-
-    await task.save();
-    
-    const updatedTask = await Task.findById(task._id)
-      .populate("attachments.uploader", "name email");
-
-    res.json(updatedTask.attachments[updatedTask.attachments.length - 1]);
-  } catch (err) {
-    res.status(500).json({ message: "Server error" });
   }
-});
+);
 
 // Download task attachment
-router.get("/:id/attachments/:attachmentId/download", authMiddleware, async (req, res) => {
-  try {
-    const task = await Task.findById(req.params.id).populate("project", "members");
-    if (!task) {
-      return res.status(404).json({ message: "Task not found" });
-    }
+router.get(
+  "/:id/attachments/:attachmentId/download",
+  authMiddleware,
+  async (req, res) => {
+    try {
+      const task = await Task.findById(req.params.id).populate(
+        "project",
+        "members"
+      );
+      if (!task) {
+        return res.status(404).json({ message: "Task not found" });
+      }
 
-    // Check authorization
-    const project = task.project;
-    if (
-      req.user.role !== "admin" &&
-      !project.members.map(m => String(m)).includes(req.user.userId)
-    ) {
-      return res.status(403).json({ message: "Not authorized to download attachments from this task" });
-    }
+      // Check authorization
+      const project = task.project;
+      if (
+        req.user.role !== "admin" &&
+        !project.members.map((m) => String(m)).includes(req.user.userId)
+      ) {
+        return res.status(403).json({
+          message: "Not authorized to download attachments from this task",
+        });
+      }
 
-    const attachment = task.attachments.id(req.params.attachmentId);
-    if (!attachment) {
-      return res.status(404).json({ message: "Attachment not found" });
-    }
+      const attachment = task.attachments.id(req.params.attachmentId);
+      if (!attachment) {
+        return res.status(404).json({ message: "Attachment not found" });
+      }
 
-    const filePath = path.join(__dirname, "../uploads/tasks", attachment.filename);
-    if (!fs.existsSync(filePath)) {
-      return res.status(404).json({ message: "File not found on server" });
-    }
+      const filePath = path.join(
+        __dirname,
+        "../uploads/tasks",
+        attachment.filename
+      );
+      if (!fs.existsSync(filePath)) {
+        return res.status(404).json({ message: "File not found on server" });
+      }
 
-    res.download(filePath, attachment.originalname);
-  } catch (err) {
-    res.status(500).json({ message: "Server error" });
+      res.download(filePath, attachment.originalname);
+    } catch (err) {
+      res.status(500).json({ message: "Server error" });
+    }
   }
-});
+);
 
 // Start time tracking
 router.post("/:id/start-timer", authMiddleware, async (req, res) => {
   try {
-    const task = await Task.findById(req.params.id).populate("project", "members");
+    const task = await Task.findById(req.params.id).populate(
+      "project",
+      "members"
+    );
     if (!task) {
       return res.status(404).json({ message: "Task not found" });
     }
@@ -504,18 +653,22 @@ router.post("/:id/start-timer", authMiddleware, async (req, res) => {
     const project = task.project;
     if (
       req.user.role !== "admin" &&
-      !project.members.map(m => String(m)).includes(req.user.userId)
+      !project.members.map((m) => String(m)).includes(req.user.userId)
     ) {
-      return res.status(403).json({ message: "Not authorized to track time on this task" });
+      return res
+        .status(403)
+        .json({ message: "Not authorized to track time on this task" });
     }
 
     // Check if user already has an active timer
     const activeTimer = task.timeEntries.find(
-      entry => entry.user.toString() === req.user.userId && !entry.endTime
+      (entry) => entry.user.toString() === req.user.userId && !entry.endTime
     );
 
     if (activeTimer) {
-      return res.status(400).json({ message: "You already have an active timer for this task" });
+      return res
+        .status(400)
+        .json({ message: "You already have an active timer for this task" });
     }
 
     task.timeEntries.push({
@@ -524,9 +677,11 @@ router.post("/:id/start-timer", authMiddleware, async (req, res) => {
     });
 
     await task.save();
-    
-    const updatedTask = await Task.findById(task._id)
-      .populate("timeEntries.user", "name email");
+
+    const updatedTask = await Task.findById(task._id).populate(
+      "timeEntries.user",
+      "name email"
+    );
 
     res.json(updatedTask.timeEntries[updatedTask.timeEntries.length - 1]);
   } catch (err) {
@@ -544,15 +699,19 @@ router.post("/:id/stop-timer", authMiddleware, async (req, res) => {
     }
 
     const activeTimer = task.timeEntries.find(
-      entry => entry.user.toString() === req.user.userId && !entry.endTime
+      (entry) => entry.user.toString() === req.user.userId && !entry.endTime
     );
 
     if (!activeTimer) {
-      return res.status(400).json({ message: "No active timer found for this task" });
+      return res
+        .status(400)
+        .json({ message: "No active timer found for this task" });
     }
 
     const endTime = new Date();
-    const duration = Math.round((endTime - activeTimer.startTime) / (1000 * 60)); // Duration in minutes
+    const duration = Math.round(
+      (endTime - activeTimer.startTime) / (1000 * 60)
+    ); // Duration in minutes
 
     activeTimer.endTime = endTime;
     activeTimer.duration = duration;
@@ -564,9 +723,11 @@ router.post("/:id/stop-timer", authMiddleware, async (req, res) => {
     }, 0);
 
     await task.save();
-    
-    const updatedTask = await Task.findById(task._id)
-      .populate("timeEntries.user", "name email");
+
+    const updatedTask = await Task.findById(task._id).populate(
+      "timeEntries.user",
+      "name email"
+    );
 
     res.json(activeTimer);
   } catch (err) {
@@ -590,7 +751,8 @@ router.get("/templates", authMiddleware, async (req, res) => {
 // Create task template
 router.post("/templates", authMiddleware, async (req, res) => {
   try {
-    const { templateName, title, description, priority, estimatedHours, tags } = req.body;
+    const { templateName, title, description, priority, estimatedHours, tags } =
+      req.body;
 
     const template = new Task({
       title,
@@ -604,9 +766,11 @@ router.post("/templates", authMiddleware, async (req, res) => {
     });
 
     await template.save();
-    
-    const populatedTemplate = await Task.findById(template._id)
-      .populate("createdBy", "name email");
+
+    const populatedTemplate = await Task.findById(template._id).populate(
+      "createdBy",
+      "name email"
+    );
 
     res.status(201).json(populatedTemplate);
   } catch (err) {
@@ -618,7 +782,7 @@ router.post("/templates", authMiddleware, async (req, res) => {
 router.post("/from-template/:templateId", authMiddleware, async (req, res) => {
   try {
     const { project, assignedTo, dueDate } = req.body;
-    
+
     const template = await Task.findById(req.params.templateId);
     if (!template || !template.isTemplate) {
       return res.status(404).json({ message: "Template not found" });
@@ -632,9 +796,11 @@ router.post("/from-template/:templateId", authMiddleware, async (req, res) => {
 
     if (
       req.user.role !== "admin" &&
-      !projectDoc.members.map(m => String(m)).includes(req.user.userId)
+      !projectDoc.members.map((m) => String(m)).includes(req.user.userId)
     ) {
-      return res.status(403).json({ message: "Not authorized to create tasks in this project" });
+      return res
+        .status(403)
+        .json({ message: "Not authorized to create tasks in this project" });
     }
 
     const task = new Task({
@@ -650,7 +816,7 @@ router.post("/from-template/:templateId", authMiddleware, async (req, res) => {
     });
 
     await task.save();
-    
+
     const populatedTask = await Task.findById(task._id)
       .populate("assignedTo", "name email")
       .populate("createdBy", "name email")
@@ -662,49 +828,215 @@ router.post("/from-template/:templateId", authMiddleware, async (req, res) => {
   }
 });
 
-// Get task analytics
-router.get("/analytics/project/:projectId", authMiddleware, async (req, res) => {
+// Subtasks: create as a child of a task
+router.post("/:id/subtasks", authMiddleware, async (req, res) => {
   try {
-    const project = await Project.findById(req.params.projectId);
-    if (!project) {
-      return res.status(404).json({ message: "Project not found" });
+    const parent = await Task.findById(req.params.id).populate(
+      "project",
+      "members createdBy"
+    );
+    if (!parent)
+      return res.status(404).json({ message: "Parent task not found" });
+
+    const project = parent.project;
+    const isAdmin = req.user.role === "admin";
+    const isProjectMember = project.members
+      .map((m) => String(m))
+      .includes(req.user.userId);
+    const isCreator = String(project.createdBy) === req.user.userId;
+    if (!isAdmin && !isProjectMember && !isCreator) {
+      return res
+        .status(403)
+        .json({ message: "Not authorized to create subtasks" });
     }
 
-    // Check authorization
-    if (
-      req.user.role !== "admin" &&
-      !project.members.map(m => String(m)).includes(req.user.userId)
-    ) {
-      return res.status(403).json({ message: "Not authorized to view analytics" });
-    }
-
-    const tasks = await Task.find({ project: req.params.projectId });
-    
-    const analytics = {
-      total: tasks.length,
-      byStatus: {
-        pending: tasks.filter(t => t.status === "pending").length,
-        "in-progress": tasks.filter(t => t.status === "in-progress").length,
-        completed: tasks.filter(t => t.status === "completed").length,
-        blocked: tasks.filter(t => t.status === "blocked").length,
-        review: tasks.filter(t => t.status === "review").length,
-      },
-      byPriority: {
-        low: tasks.filter(t => t.priority === "low").length,
-        medium: tasks.filter(t => t.priority === "medium").length,
-        high: tasks.filter(t => t.priority === "high").length,
-        critical: tasks.filter(t => t.priority === "critical").length,
-      },
-      overdue: tasks.filter(t => t.dueDate && t.dueDate < new Date() && t.status !== "completed").length,
-      totalEstimatedHours: tasks.reduce((sum, t) => sum + (t.estimatedHours || 0), 0),
-      totalActualHours: tasks.reduce((sum, t) => sum + (t.actualHours || 0), 0),
-      averageProgress: tasks.length > 0 ? tasks.reduce((sum, t) => sum + (t.progress || 0), 0) / tasks.length : 0,
-    };
-
-    res.json(analytics);
+    const { title, description, assignedTo, priority, dueDate } = req.body;
+    const subtask = new Task({
+      title,
+      description: description || "",
+      project: parent.project._id || parent.project,
+      assignedTo: assignedTo || req.user.userId,
+      createdBy: req.user.userId,
+      priority: priority || "medium",
+      dueDate,
+      parentTask: parent._id,
+      status: "pending",
+    });
+    await subtask.save();
+    parent.subtasks.push(subtask._id);
+    await parent.save();
+    const populated = await Task.findById(subtask._id)
+      .populate("assignedTo", "name email")
+      .populate("createdBy", "name email");
+    res.status(201).json(populated);
   } catch (err) {
     res.status(500).json({ message: "Server error" });
   }
 });
+
+// List subtasks of a task
+router.get("/:id/subtasks", authMiddleware, async (req, res) => {
+  try {
+    const task = await Task.findById(req.params.id).populate(
+      "project",
+      "members"
+    );
+    if (!task) return res.status(404).json({ message: "Task not found" });
+    const project = task.project;
+    if (
+      req.user.role !== "admin" &&
+      !project.members.map((m) => String(m)).includes(req.user.userId)
+    ) {
+      return res.status(403).json({ message: "Not authorized" });
+    }
+    const subtasks = await Task.find({ _id: { $in: task.subtasks } })
+      .populate("assignedTo", "name email")
+      .populate("createdBy", "name email");
+    res.json(subtasks);
+  } catch (err) {
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+// Update a subtask (same auth as task update)
+router.put(
+  "/:parentId/subtasks/:subtaskId",
+  authMiddleware,
+  async (req, res) => {
+    try {
+      const subtask = await Task.findById(req.params.subtaskId).populate(
+        "project",
+        "members createdBy"
+      );
+      if (!subtask)
+        return res.status(404).json({ message: "Subtask not found" });
+      const isAdmin = req.user.role === "admin";
+      const isProjectCreator =
+        String(subtask.project.createdBy) === req.user.userId;
+      const isAssigned = String(subtask.assignedTo) === req.user.userId;
+      const isProjectMember = subtask.project.members
+        .map((m) => String(m))
+        .includes(req.user.userId);
+      if (!isAdmin && !isProjectCreator && !isAssigned && !isProjectMember) {
+        return res
+          .status(403)
+          .json({ message: "Not authorized to update this subtask" });
+      }
+      const fields = [
+        "title",
+        "description",
+        "status",
+        "priority",
+        "dueDate",
+        "progress",
+      ];
+      fields.forEach((f) => {
+        if (req.body[f] !== undefined) subtask[f] = req.body[f];
+      });
+      await subtask.save();
+      const updated = await Task.findById(subtask._id)
+        .populate("assignedTo", "name email")
+        .populate("createdBy", "name email");
+      res.json(updated);
+    } catch (err) {
+      res.status(500).json({ message: "Server error" });
+    }
+  }
+);
+
+// Delete a subtask and remove from parent
+router.delete(
+  "/:parentId/subtasks/:subtaskId",
+  authMiddleware,
+  async (req, res) => {
+    try {
+      const parent = await Task.findById(req.params.parentId).populate(
+        "project",
+        "members createdBy"
+      );
+      if (!parent)
+        return res.status(404).json({ message: "Parent task not found" });
+      const isAdmin = req.user.role === "admin";
+      const isProjectCreator =
+        String(parent.project.createdBy) === req.user.userId;
+      if (!isAdmin && !isProjectCreator) {
+        return res
+          .status(403)
+          .json({ message: "Not authorized to delete subtask" });
+      }
+      await Task.findByIdAndDelete(req.params.subtaskId);
+      await Task.updateOne(
+        { _id: parent._id },
+        { $pull: { subtasks: req.params.subtaskId } }
+      );
+      res.json({ message: "Subtask deleted" });
+    } catch (err) {
+      res.status(500).json({ message: "Server error" });
+    }
+  }
+);
+
+// Get task analytics
+router.get(
+  "/analytics/project/:projectId",
+  authMiddleware,
+  async (req, res) => {
+    try {
+      const project = await Project.findById(req.params.projectId);
+      if (!project) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+
+      // Check authorization
+      if (
+        req.user.role !== "admin" &&
+        !project.members.map((m) => String(m)).includes(req.user.userId)
+      ) {
+        return res
+          .status(403)
+          .json({ message: "Not authorized to view analytics" });
+      }
+
+      const tasks = await Task.find({ project: req.params.projectId });
+
+      const analytics = {
+        total: tasks.length,
+        byStatus: {
+          pending: tasks.filter((t) => t.status === "pending").length,
+          "in-progress": tasks.filter((t) => t.status === "in-progress").length,
+          completed: tasks.filter((t) => t.status === "completed").length,
+          blocked: tasks.filter((t) => t.status === "blocked").length,
+          review: tasks.filter((t) => t.status === "review").length,
+        },
+        byPriority: {
+          low: tasks.filter((t) => t.priority === "low").length,
+          medium: tasks.filter((t) => t.priority === "medium").length,
+          high: tasks.filter((t) => t.priority === "high").length,
+          critical: tasks.filter((t) => t.priority === "critical").length,
+        },
+        overdue: tasks.filter(
+          (t) => t.dueDate && t.dueDate < new Date() && t.status !== "completed"
+        ).length,
+        totalEstimatedHours: tasks.reduce(
+          (sum, t) => sum + (t.estimatedHours || 0),
+          0
+        ),
+        totalActualHours: tasks.reduce(
+          (sum, t) => sum + (t.actualHours || 0),
+          0
+        ),
+        averageProgress:
+          tasks.length > 0
+            ? tasks.reduce((sum, t) => sum + (t.progress || 0), 0) /
+              tasks.length
+            : 0,
+      };
+
+      res.json(analytics);
+    } catch (err) {
+      res.status(500).json({ message: "Server error" });
+    }
+  }
+);
 
 module.exports = router;

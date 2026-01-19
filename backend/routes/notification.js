@@ -1,4 +1,5 @@
 const express = require("express");
+const mongoose = require("mongoose");
 const router = express.Router();
 const Notification = require("../models/Notification");
 const User = require("../models/User");
@@ -22,19 +23,25 @@ function authMiddleware(req, res, next) {
 // Get all notifications for current user
 router.get("/", authMiddleware, async (req, res) => {
   try {
-    const { page = 1, limit = 20, category, unreadOnly = false } = req.query;
+    const {
+      page = 1,
+      limit = 20,
+      category,
+      unreadOnly = false,
+      isArchived,
+    } = req.query;
     const skip = (page - 1) * limit;
 
     let query = {
       recipient: req.user.userId,
-      isArchived: false,
+      isArchived: isArchived === undefined ? false : isArchived === "true",
     };
 
     if (category) {
       query.category = category;
     }
 
-    if (unreadOnly === 'true') {
+    if (unreadOnly === "true") {
       query.isRead = false;
     }
 
@@ -103,7 +110,9 @@ router.get("/:id", authMiddleware, async (req, res) => {
 
     // Check if user is the recipient
     if (notification.recipient.toString() !== req.user.userId) {
-      return res.status(403).json({ message: "Not authorized to view this notification" });
+      return res
+        .status(403)
+        .json({ message: "Not authorized to view this notification" });
     }
 
     res.json(notification);
@@ -123,7 +132,9 @@ router.patch("/:id/read", authMiddleware, async (req, res) => {
 
     // Check if user is the recipient
     if (notification.recipient.toString() !== req.user.userId) {
-      return res.status(403).json({ message: "Not authorized to modify this notification" });
+      return res
+        .status(403)
+        .json({ message: "Not authorized to modify this notification" });
     }
 
     await notification.markAsRead();
@@ -155,7 +166,9 @@ router.patch("/:id/archive", authMiddleware, async (req, res) => {
 
     // Check if user is the recipient
     if (notification.recipient.toString() !== req.user.userId) {
-      return res.status(403).json({ message: "Not authorized to modify this notification" });
+      return res
+        .status(403)
+        .json({ message: "Not authorized to modify this notification" });
     }
 
     await notification.archive();
@@ -176,7 +189,9 @@ router.delete("/:id", authMiddleware, async (req, res) => {
 
     // Check if user is the recipient
     if (notification.recipient.toString() !== req.user.userId) {
-      return res.status(403).json({ message: "Not authorized to delete this notification" });
+      return res
+        .status(403)
+        .json({ message: "Not authorized to delete this notification" });
     }
 
     await Notification.findByIdAndDelete(req.params.id);
@@ -190,7 +205,9 @@ router.delete("/:id", authMiddleware, async (req, res) => {
 router.post("/", authMiddleware, async (req, res) => {
   try {
     if (req.user.role !== "admin") {
-      return res.status(403).json({ message: "Only admins can create notifications" });
+      return res
+        .status(403)
+        .json({ message: "Only admins can create notifications" });
     }
 
     const {
@@ -253,8 +270,16 @@ router.get("/stats/overview", authMiddleware, async (req, res) => {
       recentNotifications,
     ] = await Promise.all([
       Notification.countDocuments({ recipient: userId }),
-      Notification.countDocuments({ recipient: userId, isRead: false, isArchived: false }),
-      Notification.countDocuments({ recipient: userId, isRead: true, isArchived: false }),
+      Notification.countDocuments({
+        recipient: userId,
+        isRead: false,
+        isArchived: false,
+      }),
+      Notification.countDocuments({
+        recipient: userId,
+        isRead: true,
+        isArchived: false,
+      }),
       Notification.countDocuments({ recipient: userId, isArchived: true }),
       Notification.aggregate([
         { $match: { recipient: mongoose.Types.ObjectId(userId) } },
@@ -329,7 +354,9 @@ router.post("/bulk", authMiddleware, async (req, res) => {
     }
 
     await Notification.updateMany(query, updateData);
-    res.json({ message: `Notifications ${action.replace('-', ' ')} successfully` });
+    res.json({
+      message: `Notifications ${action.replace("-", " ")} successfully`,
+    });
   } catch (err) {
     res.status(500).json({ message: "Server error" });
   }
@@ -338,7 +365,16 @@ router.post("/bulk", authMiddleware, async (req, res) => {
 // Search notifications
 router.get("/search", authMiddleware, async (req, res) => {
   try {
-    const { q, category, priority, isRead, startDate, endDate, page = 1, limit = 20 } = req.query;
+    const {
+      q,
+      category,
+      priority,
+      isRead,
+      startDate,
+      endDate,
+      page = 1,
+      limit = 20,
+    } = req.query;
     const skip = (page - 1) * limit;
 
     let query = {
@@ -432,7 +468,7 @@ router.get("/export", authMiddleware, async (req, res) => {
 
     if (format === "csv") {
       // Convert to CSV format
-      const csvData = notifications.map(notification => ({
+      const csvData = notifications.map((notification) => ({
         Title: notification.title,
         Message: notification.message,
         Type: notification.type,
@@ -447,12 +483,19 @@ router.get("/export", authMiddleware, async (req, res) => {
       }));
 
       res.setHeader("Content-Type", "text/csv");
-      res.setHeader("Content-Disposition", "attachment; filename=notifications.csv");
-      
+      res.setHeader(
+        "Content-Disposition",
+        "attachment; filename=notifications.csv"
+      );
+
       // Convert to CSV string
       const csvString = [
         Object.keys(csvData[0]).join(","),
-        ...csvData.map(row => Object.values(row).map(value => `"${value}"`).join(","))
+        ...csvData.map((row) =>
+          Object.values(row)
+            .map((value) => `"${value}"`)
+            .join(",")
+        ),
       ].join("\n");
 
       res.send(csvString);
@@ -464,4 +507,4 @@ router.get("/export", authMiddleware, async (req, res) => {
   }
 });
 
-module.exports = router; 
+module.exports = router;
