@@ -59,17 +59,11 @@ router.get("/project/:projectId", authMiddleware, async (req, res) => {
 
     // Check if user is member or admin
     const isAdmin = req.user.role === "admin";
-    const isProjectMember = project.members
+    const members = project.members || [];
+    const isProjectMember = members
       .map((m) => String(m))
       .includes(req.user.userId);
     const isProjectCreator = String(project.createdBy) === req.user.userId;
-
-    console.log("Authorization check:", {
-      isAdmin,
-      isProjectMember,
-      isProjectCreator,
-      userId: req.user.userId,
-    });
 
     if (!isAdmin && !isProjectMember && !isProjectCreator) {
       return res.status(403).json({ message: "Not authorized to view tasks" });

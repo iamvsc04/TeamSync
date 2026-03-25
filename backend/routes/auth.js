@@ -106,7 +106,7 @@ router.post("/login", async (req, res) => {
       },
     });
   } catch (err) {
-    console.error(err);
+    console.error("Error in POST /login:", err);
     res.status(500).json({ message: "Server error." });
   }
 });
@@ -226,10 +226,12 @@ router.get("/profile", authMiddleware, async (req, res) => {
 // Update user profile
 router.put("/profile", authMiddleware, async (req, res) => {
   try {
-    const { name, email } = req.body;
+    const { name, email, preferences, security } = req.body;
     const updates = {};
 
     if (name) updates.name = name;
+    if (preferences) updates.preferences = preferences;
+    if (security) updates.security = security;
     if (email) {
       // Check if email is already taken by another user
       const existingUser = await User.findOne({
@@ -314,7 +316,7 @@ router.get("/test-email", authMiddleware, async (req, res) => {
         user.name,
         "Test Email from TeamSync",
         "This is a test email to verify that your email service is working correctly. If you received this, everything is set up properly!",
-        "http://localhost:5173/dashboard"
+        `${process.env.FRONTEND_URL || "http://localhost:5173"}/dashboard`
       );
       
       res.json({ 

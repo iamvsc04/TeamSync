@@ -1,6 +1,8 @@
+import { API_BASE } from '../config/api';
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
+
   Box,
   Typography,
   Paper,
@@ -20,6 +22,7 @@ import {
   Tooltip,
 } from "@mui/material";
 import {
+
   Add as AddIcon,
   Folder as FolderIcon,
   Group as GroupIcon,
@@ -31,6 +34,7 @@ import {
 } from "@mui/icons-material";
 import { useAuth } from "../useAuth";
 import { useTheme } from "../ThemeContext";
+
 
 export default function ProjectsOverview() {
   const { user, role } = useAuth();
@@ -56,9 +60,9 @@ export default function ProjectsOverview() {
       let url = "";
 
       if (role === "admin") {
-        url = "http://localhost:5000/api/projects/mine";
+        url = `${API_BASE}/projects/mine`;
       } else {
-        url = "http://localhost:5000/api/projects/member-projects";
+        url = `${API_BASE}/projects/member-projects`;
       }
 
       const response = await fetch(url, {
@@ -92,7 +96,7 @@ export default function ProjectsOverview() {
 
     try {
       const token = localStorage.getItem("token");
-      const response = await fetch("http://localhost:5000/api/projects", {
+      const response = await fetch(`${API_BASE}/projects`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -142,7 +146,7 @@ export default function ProjectsOverview() {
     try {
       const token = localStorage.getItem("token");
       const response = await fetch(
-        `http://localhost:5000/api/projects/${projectId}`,
+        `${API_BASE}/projects/${projectId}`,
         {
           method: "DELETE",
           headers: {

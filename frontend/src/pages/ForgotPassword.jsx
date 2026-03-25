@@ -1,5 +1,7 @@
+import { API_BASE } from '../config/api';
 import React, { useState } from "react";
 import {
+
   Box,
   Paper,
   Typography,
@@ -8,6 +10,7 @@ import {
   Alert,
 } from "@mui/material";
 import { useTheme } from "../ThemeContext";
+
 
 export default function ForgotPassword() {
   const { theme } = useTheme();
@@ -22,7 +25,7 @@ export default function ForgotPassword() {
     setErr("");
     try {
       const res = await fetch(
-        "http://localhost:5000/api/auth/forgot-password",
+        `${API_BASE}/auth/forgot-password`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },

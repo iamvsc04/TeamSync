@@ -1,5 +1,7 @@
+import { API_BASE } from '../config/api';
 import React, { useState, useEffect } from 'react';
 import {
+
   Box,
   Paper,
   Typography,
@@ -28,6 +30,7 @@ import {
   Skeleton,
 } from '@mui/material';
 import {
+
   MoreVert as MoreIcon,
   Download as DownloadIcon,
   Delete as DeleteIcon,
@@ -43,6 +46,7 @@ import {
 } from '@mui/icons-material';
 import { useTheme } from '../ThemeContext';
 import { useAuth } from '../useAuth';
+
 
 // File type icons mapping
 const getFileIcon = (fileName) => {
@@ -126,7 +130,7 @@ function FilePreviewDialog({ file, open, onClose }) {
 
           {isImage && (
             <img
-              src={`http://localhost:5000/api/projects/${file.projectId}/documents/${file._id}/preview`}
+              src={file.url}
               alt={file.originalname}
               style={{
                 maxWidth: '100%',
@@ -142,7 +146,7 @@ function FilePreviewDialog({ file, open, onClose }) {
 
           {isPdf && (
             <iframe
-              src={`http://localhost:5000/api/projects/${file.projectId}/documents/${file._id}/preview`}
+              src={file.url}
               width="100%"
               height="600px"
               title={file.originalname}
@@ -173,8 +177,10 @@ function FilePreviewDialog({ file, open, onClose }) {
           startIcon={<DownloadIcon />}
           onClick={() => {
             const link = document.createElement('a');
-            link.href = `http://localhost:5000/api/projects/${file.projectId}/documents/${file._id}/download`;
-            link.download = file.originalname;
+            link.href = file.url;
+            link.setAttribute('download', file.originalname);
+            link.target = '_blank';
+            link.rel = 'noopener noreferrer';
             link.click();
           }}
         >
@@ -248,9 +254,14 @@ export default function FileManager({ projectId, files = [], onFileDeleted, view
   };
 
   const handleDownload = (file) => {
-    const link = document.createElement('a');
-    link.href = `http://localhost:5000/api/projects/${projectId}/documents/${file._id}/download`;
-    link.download = file.originalname;
+    // Use direct Cloudinary URL with fl_attachment for forced download
+    const url = file.url
+      ? file.url.replace('/upload/', '/upload/fl_attachment/')
+      : `${API_BASE}/projects/${projectId}/documents/${file._id}/download`;
+    const link = document.createElement(`a`);
+    link.href = url;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
     link.click();
     handleMenuClose();
   };
@@ -264,8 +275,8 @@ export default function FileManager({ projectId, files = [], onFileDeleted, view
   const handleDelete = async (file) => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5000/api/projects/${projectId}/documents/${file._id}`, {
-        method: 'DELETE',
+      const response = await fetch(`${API_BASE}/projects/${projectId}/documents/${file._id}`, {
+        method: "DELETE",
         headers: {
           'Authorization': `Bearer ${token}`,
         },
@@ -321,7 +332,7 @@ export default function FileManager({ projectId, files = [], onFileDeleted, view
                   <Box sx={{ position: 'relative', height: 160, overflow: 'hidden' }}>
                     {isImage ? (
                       <img
-                        src={`http://localhost:5000/api/projects/${projectId}/documents/${file._id}/preview`}
+                        src={file.url}
                         alt={file.originalname}
                         style={{
                           width: '100%',
@@ -330,7 +341,7 @@ export default function FileManager({ projectId, files = [], onFileDeleted, view
                         }}
                         onError={(e) => {
                           e.target.style.display = 'none';
-                          e.target.nextSibling.style.display = 'flex';
+                          e.target.parentNode.querySelector('.fallback-icon').style.display = 'flex';
                         }}
                       />
                     ) : null}

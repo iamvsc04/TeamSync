@@ -1,6 +1,8 @@
+import { API_BASE } from '../config/api';
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
+
   Box,
   Paper,
   Typography,
@@ -12,6 +14,7 @@ import {
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ErrorIcon from '@mui/icons-material/Error';
 import { useTheme } from '../ThemeContext';
+
 
 export default function VerifyEmail() {
   const { token } = useParams();
@@ -31,8 +34,8 @@ export default function VerifyEmail() {
 
   const verifyEmail = async (verificationToken) => {
     try {
-      const response = await fetch(`http://localhost:5000/api/auth/verify-email/${verificationToken}`, {
-        method: 'GET',
+      const response = await fetch(`${API_BASE}/auth/verify-email/${verificationToken}`, {
+        method: "GET",
         headers: {
           'Content-Type': 'application/json',
         },

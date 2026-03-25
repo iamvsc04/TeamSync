@@ -1,15 +1,12 @@
 const express = require("express");
 const mongoose = require("mongoose");
 const path = require("path");
-require("dotenv").config();
+require("dotenv").config({ path: path.join(__dirname, ".env") });
 const http = require("http");
 const { Server } = require("socket.io");
-
-// Import security middleware
 const {
   helmet,
   cors,
-  mongoSanitize,
   compression,
   sanitizeInput,
   requestSizeLimiter,
@@ -29,6 +26,8 @@ const Meeting = require("./models/Meeting");
 const Notification = require("./models/Notification");
 const ChatMessage = require("./models/ChatMessage");
 
+const initScheduler = require("./utils/scheduler");
+
 const authRoutes = require("./routes/auth");
 const taskRoutes = require("./routes/task");
 const projectRoutes = require("./routes/project");
@@ -39,36 +38,39 @@ const searchRoutes = require("./routes/search");
 const app = express();
 const server = http.createServer(app);
 
-// Security middleware (order matters!)
-app.use(helmet); // Security headers
-app.use(compression); // Compress responses
-app.use(cors); // CORS with proper configuration
-app.use(requestSizeLimiter); // Limit request size
-app.use(express.json({ limit: '10mb' })); // JSON parser with size limit
+app.use(helmet);
+app.use(compression);
+app.use(cors);
+app.use(requestSizeLimiter);
+app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-app.use(mongoSanitize); // Prevent NoSQL injection
-app.use(sanitizeInput); // Custom input sanitization
-app.use(generalLimiter); // General rate limiting
+app.use((req, res, next) => {
+  Object.defineProperty(req, 'query', {
+    writable: true,
+    configurable: true,
+    value: req.query
+  });
+  next();
+});
 
-// Trust proxy for accurate IP addresses (important for rate limiting)
+
+app.use(sanitizeInput);
+app.use(generalLimiter);
+
 app.set('trust proxy', 1);
 
-// Socket.IO setup for real-time features
 const io = require("socket.io")(server, {
   cors: {
-    origin: "http://localhost:5173",
+    origin: process.env.FRONTEND_URL || "http://localhost:5173",
     methods: ["GET", "POST"],
   },
 });
 
-// Make io available to routes
 app.set("io", io);
 
-// Socket.IO connection handling
 io.on("connection", (socket) => {
   console.log("User connected:", socket.id);
 
-  // Join project room
   socket.on("joinProjectRoom", (projectId) => {
     socket.join(`project_${projectId}`);
     console.log(`User ${socket.id} joined project room: ${projectId}`);
@@ -80,12 +82,9 @@ io.on("connection", (socket) => {
     console.log(`User ${socket.id} left project room: ${projectId}`);
   });
 
-  // Handle project chat messages
   socket.on("projectChatMessage", async (data) => {
     try {
       const { projectId, senderId, message, replyTo } = data;
-
-      // Save message to database
       const chatMessage = new ChatMessage({
         projectId,
         senderId,
@@ -97,14 +96,12 @@ io.on("connection", (socket) => {
       await chatMessage.save();
       await chatMessage.populate("senderId", "name email role");
 
-      // Broadcast to all users in the project room
       io.to(`project_${projectId}`).emit("projectChatMessage", chatMessage);
     } catch (error) {
       console.error("Error handling chat message:", error);
     }
   });
 
-  // Handle typing indicators
   socket.on("typing", (data) => {
     socket.to(`project_${data.projectId}`).emit("userTyping", {
       userId: data.senderId,
@@ -112,7 +109,6 @@ io.on("connection", (socket) => {
     });
   });
 
-  // Handle stop typing
   socket.on("stopTyping", (data) => {
     socket.to(`project_${data.projectId}`).emit("userStopTyping", {
       userId: data.senderId,
@@ -124,8 +120,6 @@ io.on("connection", (socket) => {
   });
 });
 
-// Mount API routes BEFORE 404 handler
-// Auth routes with stricter rate limiting
 app.use("/api/auth/login", strictAuthLimiter);
 app.use("/api/auth/signup", authLimiter);
 app.use("/api/auth/forgot-password", authLimiter);
@@ -137,7 +131,18 @@ app.use("/api/meetings", meetingRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/search", searchRoutes);
 
-// Error handling and 404 middleware (must be last)
+// --- Deployment: Serve static files in production ---
+if (process.env.NODE_ENV === "production") {
+  app.use(express.static(path.join(__dirname, "../frontend/dist")));
+
+  app.get("*", (req, res) => {
+    // If request is not an API call, serve index.html
+    if (!req.path.startsWith("/api/")) {
+      res.sendFile(path.resolve(__dirname, "../frontend", "dist", "index.html"));
+    }
+  });
+}
+
 app.use(notFoundHandler);
 app.use(errorHandler);
 
@@ -147,6 +152,7 @@ mongoose
   .connect(process.env.MONGO_URI)
   .then(() => {
     console.log("MongoDB connected");
+    initScheduler();
     server.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);
     });

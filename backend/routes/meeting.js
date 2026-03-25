@@ -49,9 +49,10 @@ router.get("/project/:projectId", authMiddleware, async (req, res) => {
     }
 
     // Check if user is member or admin
+    const members = project.members || [];
     if (
       req.user.role !== "admin" &&
-      !project.members.map(m => String(m)).includes(req.user.userId)
+      !members.map(m => String(m)).includes(req.user.userId)
     ) {
       return res.status(403).json({ message: "Not authorized to view meetings" });
     }
@@ -125,7 +126,7 @@ router.get("/:id", authMiddleware, async (req, res) => {
 // Create new meeting
 router.post("/", authMiddleware, async (req, res) => {
   try {
-    const {
+    let {
       title,
       description,
       project,
@@ -162,6 +163,13 @@ router.post("/", authMiddleware, async (req, res) => {
       }
     }
 
+    // Auto-generate video link if needed
+    if (meetingType === "video-call" && !videoCallLink) {
+        const roomId = require("crypto").randomUUID();
+        // Using a generic Jitsi Meet link for free video conferencing, or our own frontend route
+        videoCallLink = `https://meet.jit.si/TeamSync-${roomId}`; 
+    }
+
     const meeting = new Meeting({
       title,
       description,
@@ -180,6 +188,29 @@ router.post("/", authMiddleware, async (req, res) => {
 
     await meeting.save();
     
+    // Send notifications to attendees
+    if (attendees && attendees.length > 0) {
+        const Notification = require("../models/Notification"); // Ensure Notification is available
+        const notificationPromises = attendees.map(attendee => {
+            // Don't notify the organizer if they somehow included themselves
+            if (attendee.user.toString() === req.user.userId) return Promise.resolve();
+            
+            return Notification.createNotification({
+                recipient: attendee.user,
+                sender: req.user.userId,
+                type: 'meeting_invite', // Ensure this type is handled by your Notification model logic if strict
+                category: 'meeting',
+                title: 'New Meeting Invitation',
+                message: `You have been invited to the meeting: "${title}"`,
+                project: project,
+                meeting: meeting._id,
+                priority: 'high',
+                actionUrl: `/dashboard/projects/${project}?meetingId=${meeting._id}`
+            }).catch(err => console.error(`Failed to send notification to ${attendee.user}`, err));
+        });
+        await Promise.all(notificationPromises);
+    }
+
     const populatedMeeting = await Meeting.findById(meeting._id)
       .populate("organizer", "name email")
       .populate("attendees.user", "name email")
@@ -187,6 +218,7 @@ router.post("/", authMiddleware, async (req, res) => {
 
     res.status(201).json(populatedMeeting);
   } catch (err) {
+    console.error("Create meeting error:", err);
     res.status(500).json({ message: "Server error" });
   }
 });

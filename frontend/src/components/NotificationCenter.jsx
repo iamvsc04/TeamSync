@@ -1,5 +1,7 @@
+import { API_BASE } from '../config/api';
 import React, { useState, useEffect } from "react";
 import {
+
   Dialog,
   DialogTitle,
   DialogContent,
@@ -33,6 +35,7 @@ import {
   LinearProgress,
 } from "@mui/material";
 import {
+
   Notifications as NotificationsIcon,
   Search as SearchIcon,
   FilterList as FilterIcon,
@@ -55,6 +58,8 @@ import {
   Folder as ProjectIcon,
 } from "@mui/icons-material";
 import { useTheme } from "../ThemeContext";
+import { useNavigate } from "react-router-dom";
+
 
 const NotificationCenter = ({
   open,
@@ -64,6 +69,7 @@ const NotificationCenter = ({
   setUnreadNotifications,
 }) => {
   const { theme } = useTheme();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState(0);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterCategory, setFilterCategory] = useState("all");
@@ -141,7 +147,7 @@ const NotificationCenter = ({
       if (activeTab === 1) query.set("unreadOnly", "true");
       if (activeTab === 2) query.set("isArchived", "true");
       const res = await fetch(
-        `http://localhost:5000/api/notifications?${query.toString()}`,
+        `${API_BASE}/notifications?${query.toString()}`,
         {
           headers: { Authorization: `Bearer ${token}` },
         }
@@ -167,7 +173,7 @@ const NotificationCenter = ({
     try {
       const token = localStorage.getItem("token");
       const response = await fetch(
-        `http://localhost:5000/api/notifications/${notificationId}/read`,
+        `${API_BASE}/notifications/${notificationId}/read`,
         {
           method: "PATCH",
           headers: {
@@ -190,7 +196,7 @@ const NotificationCenter = ({
     try {
       const token = localStorage.getItem("token");
       const response = await fetch(
-        `http://localhost:5000/api/notifications/${notificationId}/archive`,
+        `${API_BASE}/notifications/${notificationId}/archive`,
         {
           method: "PATCH",
           headers: {
@@ -213,7 +219,7 @@ const NotificationCenter = ({
     try {
       const token = localStorage.getItem("token");
       const response = await fetch(
-        `http://localhost:5000/api/notifications/${notificationId}`,
+        `${API_BASE}/notifications/${notificationId}`,
         {
           method: "DELETE",
           headers: {
@@ -248,7 +254,7 @@ const NotificationCenter = ({
 
         if (endpoint) {
           await fetch(
-            `http://localhost:5000/api/notifications/${notificationId}/${endpoint}`,
+            `${API_BASE}/notifications/${notificationId}/${endpoint}`,
             {
               method: "PATCH",
               headers: {
@@ -259,7 +265,7 @@ const NotificationCenter = ({
           );
         } else if (action === "delete") {
           await fetch(
-            `http://localhost:5000/api/notifications/${notificationId}`,
+            `${API_BASE}/notifications/${notificationId}`,
             {
               method: "DELETE",
               headers: {
@@ -276,6 +282,23 @@ const NotificationCenter = ({
       console.error("Error performing bulk action:", error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleNotificationClick = (notification) => {
+    // Mark as read first
+    if (!notification.isRead) {
+      handleMarkAsRead(notification._id);
+    }
+
+    // Navigate based on type
+    if (notification.project || notification.projectId) {
+      const pid = notification.project?._id || notification.project || notification.projectId;
+      navigate(`/dashboard/projects/${pid}`);
+      onClose();
+    } else if (notification.type.startsWith('task') && notification.project) {
+        navigate(`/dashboard/projects/${notification.project}`);
+        onClose();
     }
   };
 
@@ -545,10 +568,12 @@ const NotificationCenter = ({
               {filteredNotifications.map((notification) => (
                 <ListItem
                   key={notification._id}
+                  onClick={() => handleNotificationClick(notification)}
                   sx={{
                     borderBottom: `1px solid ${
                       theme === "dark" ? "#333" : "#f0f0f0"
                     }`,
+                    cursor: 'pointer',
                     bgcolor: notification.isRead
                       ? "transparent"
                       : theme === "dark"

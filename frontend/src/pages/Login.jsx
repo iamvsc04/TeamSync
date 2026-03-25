@@ -1,3 +1,4 @@
+import { API_BASE } from '../config/api';
 import React, { useState } from "react";
 import {
   Box,
@@ -13,6 +14,7 @@ import { Close } from "@mui/icons-material";
 import AuthForm from "../components/AuthForm";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../useAuth";
+
 
 function SlideTransition(props) {
   return <Slide {...props} direction="up" />;
@@ -33,7 +35,7 @@ export default function Login() {
 
     try {
       // Real API call
-      const res = await fetch("http://localhost:5000/api/auth/login", {
+      const res = await fetch(`${API_BASE}/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -77,24 +79,6 @@ export default function Login() {
   return (
     <Box sx={{ position: "relative", minHeight: "100vh" }}>
       <AuthForm type="login" onSubmit={handleLogin} isLoading={isLoading} />
-      <Box
-        sx={{ display: "flex", justifyContent: "space-between", px: 2, mt: 1 }}
-      >
-        <Link
-          component="button"
-          variant="body2"
-          onClick={() => navigate("/signup")}
-        >
-          Don't have an account? Sign Up
-        </Link>
-        <Link
-          component="button"
-          variant="body2"
-          onClick={() => navigate("/forgot-password")}
-        >
-          Forgot password?
-        </Link>
-      </Box>
 
       {/* Enhanced Notification */}
       <Snackbar

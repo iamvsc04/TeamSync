@@ -108,40 +108,30 @@ const MeetingSchema = new mongoose.Schema(
   }
 );
 
-// Indexes for better query performance
 MeetingSchema.index({ project: 1, startTime: 1 });
 MeetingSchema.index({ organizer: 1, startTime: 1 });
 MeetingSchema.index({ "attendees.user": 1, startTime: 1 });
 MeetingSchema.index({ status: 1, startTime: 1 });
 
-// Virtual for meeting duration
 MeetingSchema.virtual('duration').get(function() {
   if (this.startTime && this.endTime) {
-    return Math.round((this.endTime - this.startTime) / (1000 * 60)); // Duration in minutes
+    return Math.round((this.endTime - this.startTime) / (1000 * 60));
   }
   return 0;
 });
-
-// Virtual for checking if meeting is upcoming
 MeetingSchema.virtual('isUpcoming').get(function() {
   return this.startTime > new Date() && this.status === 'scheduled';
 });
-
-// Virtual for checking if meeting is ongoing
 MeetingSchema.virtual('isOngoing').get(function() {
   const now = new Date();
   return this.startTime <= now && this.endTime >= now && this.status === 'scheduled';
 });
-
-// Pre-save middleware to validate end time
 MeetingSchema.pre('save', function(next) {
   if (this.startTime && this.endTime && this.endTime <= this.startTime) {
     return next(new Error('End time must be after start time'));
   }
   next();
 });
-
-// Method to get meeting statistics
 MeetingSchema.methods.getStats = function() {
   const totalAttendees = this.attendees.length;
   const acceptedAttendees = this.attendees.filter(a => a.status === 'accepted').length;

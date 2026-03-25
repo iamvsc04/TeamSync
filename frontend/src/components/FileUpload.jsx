@@ -1,6 +1,7 @@
+import { API_BASE } from '../config/api';
 import React, { useState, useRef, useCallback } from 'react';
-import {
-  Box,
+
+import {  Box,
   Paper,
   Typography,
   Button,
@@ -34,6 +35,7 @@ import {
   Close as CloseIcon,
 } from '@mui/icons-material';
 import { useTheme } from '../ThemeContext';
+
 
 // File type icons mapping
 const getFileIcon = (fileName) => {
@@ -105,7 +107,7 @@ function FilePreview({ file, open, onClose }) {
 
           {isImage && (
             <img
-              src={`http://localhost:5000/api/projects/${file.projectId}/documents/${file._id}/preview`}
+              src={file.url}
               alt={file.originalname}
               style={{
                 maxWidth: '100%',
@@ -120,11 +122,11 @@ function FilePreview({ file, open, onClose }) {
 
           {isPdf && (
             <iframe
-              src={`http://localhost:5000/api/projects/${file.projectId}/documents/${file._id}/preview`}
+              src={file.url}
               width="100%"
               height="500px"
               title={file.originalname}
-              style={{ display: loading ? 'none' : 'block' }}
+              style={{ display: loading ? 'none' : 'block', border: 'none' }}
               onLoad={handleLoad}
               onError={handleError}
             />
@@ -147,10 +149,13 @@ function FilePreview({ file, open, onClose }) {
         <Button
           startIcon={<DownloadIcon />}
           onClick={() => {
-            const link = document.createElement('a');
-            link.href = `http://localhost:5000/api/projects/${file.projectId}/documents/${file._id}/download`;
-            link.download = file.originalname;
-            link.click();
+            if (file.url) {
+              const link = document.createElement('a');
+              link.href = file.url.replace('/upload/', '/upload/fl_attachment/');
+              link.target = '_blank';
+              link.rel = 'noopener noreferrer';
+              link.click();
+            }
           }}
         >
           Download
@@ -282,7 +287,7 @@ export default function FileUpload({
             f.id === fileData.id ? { ...f, progress: 0 } : f
           ));
 
-          const response = await fetch(`http://localhost:5000/api/projects/${projectId}/documents`, {
+          const response = await fetch(`${API_BASE}/projects/${projectId}/documents`, {
             method: 'POST',
             headers: {
               'Authorization': `Bearer ${token}`,
@@ -296,14 +301,20 @@ export default function FileUpload({
           }
 
           const result = await response.json();
+          // result can be { documents: [...] } or a single document object
+          const uploadedDoc = Array.isArray(result.documents)
+            ? result.documents[0]
+            : result;
           
-          // Mark as uploaded
+          // Mark local file as uploaded, store the CDN url for preview
           setFiles(prev => prev.map(f => 
-            f.id === fileData.id ? { ...f, progress: 100, uploaded: true, error: null } : f
+            f.id === fileData.id
+              ? { ...f, progress: 100, uploaded: true, error: null, serverDoc: uploadedDoc }
+              : f
           ));
 
           if (onUploadSuccess) {
-            onUploadSuccess(result);
+            onUploadSuccess(uploadedDoc);
           }
 
         } catch (error) {
@@ -450,7 +461,7 @@ export default function FileUpload({
                         <Tooltip title="Preview">
                           <IconButton 
                             size="small" 
-                            onClick={() => handlePreview(fileData)}
+                            onClick={() => handlePreview(fileData.serverDoc || fileData)}
                           >
                             <PreviewIcon />
                           </IconButton>

@@ -32,7 +32,6 @@ const ChatMessageSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// Index for better query performance
 ChatMessageSchema.index({ projectId: 1, timestamp: -1 });
 ChatMessageSchema.index({ senderId: 1 });
 

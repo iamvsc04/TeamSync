@@ -1,5 +1,7 @@
+import { API_BASE, SOCKET_URL } from '../config/api';
 import React, { useState, useEffect } from "react";
 import {
+
   Box,
   Typography,
   Paper,
@@ -43,6 +45,7 @@ import {
   InputAdornment,
 } from "@mui/material";
 import {
+
   Add as AddIcon,
   Edit as EditIcon,
   Delete as DeleteIcon,
@@ -71,6 +74,7 @@ import { useAuth } from "../useAuth";
 import { useTheme } from "../ThemeContext";
 import { io } from "socket.io-client";
 import KanbanBoard from "./KanbanBoard";
+
 
 const TaskManagement = ({ projectId, onTaskUpdate }) => {
   const { user } = useAuth();
@@ -111,7 +115,7 @@ const TaskManagement = ({ projectId, onTaskUpdate }) => {
     fetchProjectMembers();
     fetchAnalytics();
     // realtime updates
-    const socket = io("http://localhost:5000");
+    const socket = io(SOCKET_URL);
     socket.emit("joinProjectRoom", projectId);
     socket.on("taskCreated", (evt) => {
       if (evt.projectId === String(projectId)) {
@@ -144,14 +148,14 @@ const TaskManagement = ({ projectId, onTaskUpdate }) => {
       console.log("Current user:", user);
 
       const response = await fetch(
-        `http://localhost:5000/api/tasks/project/${projectId}`,
+        `${API_BASE}/tasks/project/${projectId}`,
         {
           headers: { Authorization: `Bearer ${token}` },
         }
       );
       if (response.ok) {
         const data = await response.json();
-        console.log("Fetched tasks:", data);
+        console.log(`Fetched tasks:`, data);
         setTasks(data);
       } else {
         const errorData = await response.json();
@@ -170,7 +174,7 @@ const TaskManagement = ({ projectId, onTaskUpdate }) => {
     try {
       const token = localStorage.getItem("token");
       const response = await fetch(
-        `http://localhost:5000/api/projects/${projectId}`,
+        `${API_BASE}/projects/${projectId}`,
         {
           headers: { Authorization: `Bearer ${token}` },
         }
@@ -188,7 +192,7 @@ const TaskManagement = ({ projectId, onTaskUpdate }) => {
     try {
       const token = localStorage.getItem("token");
       const response = await fetch(
-        `http://localhost:5000/api/tasks/analytics/project/${projectId}`,
+        `${API_BASE}/tasks/analytics/project/${projectId}`,
         {
           headers: { Authorization: `Bearer ${token}` },
         }
@@ -204,8 +208,8 @@ const TaskManagement = ({ projectId, onTaskUpdate }) => {
 
   const handleCreateTask = async () => {
     try {
-      const token = localStorage.getItem("token");
-      const response = await fetch("http://localhost:5000/api/tasks", {
+      const token = localStorage.getItem("token");    
+      const response = await fetch(`${API_BASE}/tasks`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -250,7 +254,7 @@ const TaskManagement = ({ projectId, onTaskUpdate }) => {
     try {
       const token = localStorage.getItem("token");
       const response = await fetch(
-        `http://localhost:5000/api/tasks/${editingTask._id}`,
+        `${API_BASE}/tasks/${editingTask._id}`,
         {
           method: "PUT",
           headers: {
@@ -299,7 +303,7 @@ const TaskManagement = ({ projectId, onTaskUpdate }) => {
     try {
       const token = localStorage.getItem("token");
       const response = await fetch(
-        `http://localhost:5000/api/tasks/${taskId}`,
+        `${API_BASE}/tasks/${taskId}`,
         {
           method: "DELETE",
           headers: { Authorization: `Bearer ${token}` },
@@ -330,7 +334,7 @@ const TaskManagement = ({ projectId, onTaskUpdate }) => {
     try {
       const token = localStorage.getItem("token");
       const response = await fetch(
-        `http://localhost:5000/api/tasks/${taskId}/start-timer`,
+        `${API_BASE}/tasks/${taskId}/start-timer`,
         {
           method: "POST",
           headers: { Authorization: `Bearer ${token}` },
@@ -361,7 +365,7 @@ const TaskManagement = ({ projectId, onTaskUpdate }) => {
     try {
       const token = localStorage.getItem("token");
       const response = await fetch(
-        `http://localhost:5000/api/tasks/${taskId}/stop-timer`,
+        `${API_BASE}/tasks/${taskId}/stop-timer`,
         {
           method: "POST",
           headers: {
@@ -399,7 +403,7 @@ const TaskManagement = ({ projectId, onTaskUpdate }) => {
     try {
       const token = localStorage.getItem("token");
       const response = await fetch(
-        `http://localhost:5000/api/tasks/${taskId}/comments`,
+        `${API_BASE}/tasks/${taskId}/comments`,
         {
           method: "POST",
           headers: {
@@ -444,7 +448,7 @@ const TaskManagement = ({ projectId, onTaskUpdate }) => {
       setAttachmentsError("");
       const token = localStorage.getItem("token");
       const res = await fetch(
-        `http://localhost:5000/api/tasks/${taskId}/attachments`,
+        `${API_BASE}/tasks/${taskId}/attachments`,
         {
           method: "POST",
           headers: { Authorization: `Bearer ${token}` },
@@ -473,14 +477,14 @@ const TaskManagement = ({ projectId, onTaskUpdate }) => {
     try {
       const token = localStorage.getItem("token");
       const res = await fetch(
-        `http://localhost:5000/api/tasks/${taskId}/attachments/${attachment._id}/download`,
+        `${API_BASE}/tasks/${taskId}/attachments/${attachment._id}/download`,
         {
           headers: { Authorization: `Bearer ${token}` },
         }
       );
       if (!res.ok) {
         const data = await res.json();
-        throw new Error(data.message || "Failed to download");
+        throw new Error(data.message || `Failed to download`);
       }
       const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
@@ -509,7 +513,7 @@ const TaskManagement = ({ projectId, onTaskUpdate }) => {
     try {
       const token = localStorage.getItem("token");
       const response = await fetch(
-        `http://localhost:5000/api/tasks/${task._id}`,
+        `${API_BASE}/tasks/${task._id}`,
         {
           method: "PUT",
           headers: {
@@ -696,7 +700,7 @@ const TaskManagement = ({ projectId, onTaskUpdate }) => {
               try {
                 const token = localStorage.getItem("token");
                 const res = await fetch(
-                  `http://localhost:5000/api/tasks/${taskId}`,
+                  `${API_BASE}/tasks/${taskId}`,
                   {
                     method: "PUT",
                     headers: {
@@ -704,6 +708,37 @@ const TaskManagement = ({ projectId, onTaskUpdate }) => {
                       Authorization: `Bearer ${token}`,
                     },
                     body: JSON.stringify({ status }),
+                  }
+                );
+                if (res.ok) {
+                  fetchTasks();
+                  fetchAnalytics();
+                }
+              } catch (e) {
+                // ignore
+              }
+            }}
+            onUpdateProgress={async (taskId, progress) => {
+              try {
+                const token = localStorage.getItem("token");
+                // Auto-set status based on progress
+                const status =
+                  progress === 100
+                    ? "completed"
+                    : progress >= 50
+                    ? "in-progress"
+                    : undefined;
+                const body = { progress };
+                if (status) body.status = status;
+                const res = await fetch(
+                  `${API_BASE}/tasks/${taskId}`,
+                  {
+                    method: "PUT",
+                    headers: {
+                      "Content-Type": "application/json",
+                      Authorization: `Bearer ${token}`,
+                    },
+                    body: JSON.stringify(body),
                   }
                 );
                 if (res.ok) {

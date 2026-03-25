@@ -1,5 +1,7 @@
+import { API_BASE } from '../config/api';
 import React, { useState } from "react";
 import {
+
   Box,
   Paper,
   TextField,
@@ -9,6 +11,7 @@ import {
   Typography,
 } from "@mui/material";
 import {
+
   MenuItem,
   Select,
   InputLabel,
@@ -31,7 +34,7 @@ export default function GlobalSearch({ onSelect }) {
     setLoading(true);
     try {
       const res = await fetch(
-        `http://localhost:5000/api/search?q=${encodeURIComponent(
+        `${API_BASE}/search?q=${encodeURIComponent(
           q
         )}&scope=${scope}&limit=${limit}&page=${nextPage}`,
         { headers: { Authorization: `Bearer ${token}` } }

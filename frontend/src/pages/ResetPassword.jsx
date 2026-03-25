@@ -1,5 +1,7 @@
+import { API_BASE } from '../config/api';
 import React, { useState } from "react";
 import {
+
   Box,
   Paper,
   Typography,
@@ -9,6 +11,7 @@ import {
 } from "@mui/material";
 import { useTheme } from "../ThemeContext";
 import { useParams, useNavigate } from "react-router-dom";
+
 
 export default function ResetPassword() {
   const { theme } = useTheme();
@@ -30,7 +33,7 @@ export default function ResetPassword() {
     setErr("");
     try {
       const res = await fetch(
-        `http://localhost:5000/api/auth/reset-password/${token}`,
+        `${API_BASE}/auth/reset-password/${token}`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },

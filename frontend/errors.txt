@@ -1,0 +1,5 @@
+﻿D:\Projects\Ongoing Projects\Team Sync\frontend\src\components\GlobalSearch.jsx:48: Parsing error: Unexpected token Project
+D:\Projects\Ongoing Projects\Team Sync\frontend\src\components\NotificationCenter.jsx:176: Parsing error: Unexpected token $
+D:\Projects\Ongoing Projects\Team Sync\frontend\src\components\TaskManagement.jsx:195: Parsing error: Unexpected token $
+D:\Projects\Ongoing Projects\Team Sync\frontend\src\pages\Dashboard.jsx:425: Parsing error: Unexpected token `
+D:\Projects\Ongoing Projects\Team Sync\frontend\src\pages\Reports.old.jsx:234: Parsing error: Unexpected token $

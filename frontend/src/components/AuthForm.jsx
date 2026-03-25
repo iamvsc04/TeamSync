@@ -12,6 +12,7 @@ import {
   IconButton,
   InputAdornment,
   Chip,
+  useTheme,
 } from "@mui/material";
 import {
   Visibility,
@@ -41,6 +42,8 @@ const roles = [
 ];
 
 export default function AuthForm({ type, onSubmit }) {
+  const muiTheme = useTheme();
+  const isDark = muiTheme.palette.mode === 'dark';
   const [form, setForm] = useState({
     email: "",
     password: "",
@@ -159,7 +162,7 @@ export default function AuthForm({ type, onSubmit }) {
                 maxWidth: 480,
                 height: "auto",
                 borderRadius: 6,
-                background: "rgba(255, 255, 255, 0.95)",
+                background: isDark ? "rgba(30, 41, 59, 0.95)" : "rgba(255, 255, 255, 0.95)",
                 backdropFilter: "blur(20px)",
                 border: "none",
                 boxShadow: "none",
@@ -248,15 +251,26 @@ export default function AuthForm({ type, onSubmit }) {
                     mb: 2.5,
                     "& .MuiOutlinedInput-root": {
                       borderRadius: 3,
-                      background: "rgba(255, 255, 255, 0.8)",
+                      background: isDark ? "rgba(255, 255, 255, 0.05)" : "rgba(255, 255, 255, 0.8)",
                       transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+                      "& input": {
+                        color: isDark ? "#fff" : "inherit",
+                        "&::placeholder": {
+                          color: isDark ? "rgba(255, 255, 255, 0.5)" : "inherit",
+                        },
+                      },
+                      "& input:-webkit-autofill": {
+                        WebkitBoxShadow: `0 0 0 1000px ${isDark ? "#1e293b" : "#fff"} inset !important`,
+                        WebkitTextFillColor: isDark ? "#fff" : "inherit !important",
+                        borderRadius: "inherit",
+                      },
                       "&:hover": {
-                        background: "rgba(255, 255, 255, 0.9)",
+                        background: isDark ? "rgba(255, 255, 255, 0.1)" : "rgba(255, 255, 255, 0.9)",
                         transform: "translateY(-2px)",
-                        boxShadow: "0 8px 25px rgba(0, 0, 0, 0.1)",
+                        boxShadow: isDark ? "0 8px 25px rgba(0, 0, 0, 0.4)" : "0 8px 25px rgba(0, 0, 0, 0.1)",
                       },
                       "&.Mui-focused": {
-                        background: "rgba(255, 255, 255, 1)",
+                        background: isDark ? "rgba(255, 255, 255, 0.15)" : "rgba(255, 255, 255, 1)",
                         transform: "translateY(-2px)",
                         boxShadow: "0 8px 25px rgba(102, 126, 234, 0.25)",
                       },
@@ -449,15 +463,15 @@ export default function AuthForm({ type, onSubmit }) {
                                 background:
                                   form.role === role.value
                                     ? `linear-gradient(135deg, ${role.color}15, ${role.color}25)`
-                                    : "rgba(255, 255, 255, 0.8)",
+                                    : isDark ? "rgba(255, 255, 255, 0.05)" : "rgba(255, 255, 255, 0.8)",
                                 color:
                                   form.role === role.value
                                     ? role.color
-                                    : "text.secondary",
+                                    : isDark ? "rgba(255, 255, 255, 0.7)" : "text.secondary",
                                 "&:hover": {
                                   transform: "translateY(-2px)",
                                   boxShadow: `0 8px 25px ${role.color}40`,
-                                  background: `linear-gradient(135deg, ${role.color}20, ${role.color}30)`,
+                                  background: isDark ? "rgba(255, 255, 255, 0.1)" : `linear-gradient(135deg, ${role.color}20, ${role.color}30)`,
                                 },
                                 "& .MuiChip-icon": {
                                   color: "inherit",
@@ -566,7 +580,7 @@ export default function AuthForm({ type, onSubmit }) {
                       <a
                         href="/login"
                         style={{
-                          color: "#667eea",
+                          color: isDark ? "#818cf8" : "#667eea",
                           textDecoration: "underline",
                           fontWeight: 500,
                         }}
@@ -587,7 +601,7 @@ export default function AuthForm({ type, onSubmit }) {
                       <a
                         href="/signup"
                         style={{
-                          color: "#667eea",
+                          color: isDark ? "#818cf8" : "#667eea",
                           textDecoration: "underline",
                           fontWeight: 500,
                         }}

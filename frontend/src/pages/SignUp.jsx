@@ -1,5 +1,7 @@
+import { API_BASE } from '../config/api';
 import React, { useState } from "react";
 import {
+
   Box,
   Alert,
   Snackbar,
@@ -12,6 +14,7 @@ import {
   IconButton,
 } from "@mui/material";
 import {
+
   CheckCircle,
   Error,
   Info,
@@ -23,6 +26,7 @@ import {
 import AuthForm from "../components/AuthForm";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../useAuth";
+
 
 function SlideTransition({
   handleSignUp,
@@ -226,7 +230,7 @@ export default function SignUp() {
         await new Promise((resolve) => setTimeout(resolve, 600));
       }
 
-      const response = await fetch("http://localhost:5000/api/auth/signup", {
+      const response = await fetch(`${API_BASE}/auth/signup`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formData),
@@ -244,7 +248,7 @@ export default function SignUp() {
 
         // Auto-login after successful signup
         try {
-          const loginRes = await fetch("http://localhost:5000/api/auth/login", {
+          const loginRes = await fetch(`${API_BASE}/auth/login`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({

@@ -1,5 +1,7 @@
+import { API_BASE } from '../config/api';
 import React, { useState, useEffect } from "react";
 import {
+
   Box,
   Paper,
   Typography,
@@ -18,6 +20,7 @@ import {
 } from "@mui/material";
 import { Visibility, VisibilityOff } from "@mui/icons-material";
 import {
+
   Edit as EditIcon,
   Save as SaveIcon,
   Cancel as CancelIcon,
@@ -27,6 +30,7 @@ import {
 } from "@mui/icons-material";
 import { useAuth } from "../useAuth";
 import { useTheme } from "../ThemeContext";
+
 
 export default function UserProfile() {
   const { user, setUser } = useAuth();
@@ -66,7 +70,7 @@ export default function UserProfile() {
     const bootstrap = async () => {
       try {
         const token = localStorage.getItem("token");
-        const res = await fetch("http://localhost:5000/api/auth/profile", {
+        const res = await fetch(`${API_BASE}/auth/profile`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (res.ok) {
@@ -110,7 +114,7 @@ export default function UserProfile() {
 
     try {
       const token = localStorage.getItem("token");
-      const response = await fetch("http://localhost:5000/api/auth/profile", {
+      const response = await fetch(`${API_BASE}/auth/profile`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -155,7 +159,7 @@ export default function UserProfile() {
     try {
       const token = localStorage.getItem("token");
       const response = await fetch(
-        "http://localhost:5000/api/auth/change-password",
+        `${API_BASE}/auth/change-password`,
         {
           method: "PUT",
           headers: {

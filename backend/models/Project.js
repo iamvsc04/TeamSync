@@ -47,6 +47,8 @@ const ProjectSchema = new mongoose.Schema(
         originalname: { type: String, required: true },
         uploadedAt: { type: Date, default: Date.now },
         uploader: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+        size: { type: Number },
+        mimetype: { type: String },
       },
     ],
   },

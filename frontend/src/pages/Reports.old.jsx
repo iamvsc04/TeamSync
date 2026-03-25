@@ -1,5 +1,7 @@
+import { API_BASE } from '../config/api';
 import React, { useEffect, useMemo, useState } from "react";
 import {
+
   Box,
   Paper,
   Typography,
@@ -21,6 +23,7 @@ import {
   Tooltip,
 } from "@mui/material";
 import {
+
   PieChart,
   Pie,
   Cell,
@@ -38,6 +41,7 @@ import {
   AreaChart,
 } from "recharts";
 import {
+
   Download as DownloadIcon,
   Assessment as AssessmentIcon,
   TrendingUp as TrendingUpIcon,
@@ -49,6 +53,7 @@ import jsPDF from "jspdf";
 import "jspdf-autotable";
 import { useTheme } from "../ThemeContext";
 import { useAuth } from "../useAuth";
+
 
 // Color schemes for charts
 const COLORS = {
@@ -158,8 +163,8 @@ export default function Reports() {
   const fetchProjects = async () => {
     try {
       const endpoint = role === 'admin' 
-        ? "http://localhost:5000/api/projects/mine"
-        : "http://localhost:5000/api/projects/member-projects";
+        ? `${API_BASE}/projects/mine`
+        : `${API_BASE}/projects/member-projects`;
       
       const res = await fetch(endpoint, {
         headers: {
@@ -179,7 +184,7 @@ export default function Reports() {
 
   const fetchAllProjectsData = async () => {
     try {
-      const res = await fetch("http://localhost:5000/api/projects/mine", {
+      const res = await fetch(`${API_BASE}/projects/mine`, {
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
@@ -191,10 +196,10 @@ export default function Reports() {
           projects.map(async (project) => {
             try {
               const [taskRes, meetingRes] = await Promise.all([
-                fetch(`http://localhost:5000/api/tasks/analytics/project/${project._id}`, {
+                fetch(`${API_BASE}/tasks/analytics/project/${project._id}`, {
                   headers: { Authorization: `Bearer ${token}` },
                 }),
-                fetch(`http://localhost:5000/api/meetings/analytics/project/${project._id}`, {
+                fetch(`${API_BASE}/meetings/analytics/project/${project._id}`, {
                   headers: { Authorization: `Bearer ${token}` },
                 }),
               ]);
@@ -217,7 +222,7 @@ export default function Reports() {
         setAllProjectsData(projectsWithAnalytics);
       }
     } catch (e) {
-      console.error('Error fetching all projects data:', e);
+      console.error("Error fetching all projects data:", e);
     }
   };
 
@@ -226,10 +231,10 @@ export default function Reports() {
     setError("");
     try {
       const [taskRes, meetingRes] = await Promise.all([
-        fetch(`http://localhost:5000/api/tasks/analytics/project/${pid}`, {
+        fetch(`${API_BASE}/tasks/analytics/project/${pid}`, {
           headers: { Authorization: `Bearer ${token}` },
         }),
-        fetch(`http://localhost:5000/api/meetings/analytics/project/${pid}`, {
+        fetch(`${API_BASE}/meetings/analytics/project/${pid}`, {
           headers: { Authorization: `Bearer ${token}` },
         }),
       ]);

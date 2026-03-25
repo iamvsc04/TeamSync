@@ -18,22 +18,50 @@ import { ThemeProvider } from "./ThemeContext";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 import VerifyEmail from "./pages/VerifyEmail";
+import SidebarLayout from "./components/SidebarLayout";
+import OnboardingTour from "./components/OnboardingTour";
+import TasksOverview from "./pages/TasksOverview";
 
 function App() {
   return (
     <ThemeProvider>
+      <OnboardingTour />
       <Router>
         <Routes>
           <Route path="/" element={<Landing />} />
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<SignUp />} />
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/dashboard/projects" element={<ProjectsOverview />} />
-          <Route path="/dashboard/projects/:id" element={<ProjectPage />} />
-          <Route path="/dashboard/reports" element={<Reports />} />
-          <Route path="/dashboard/meetings" element={<Meetings />} />
-          <Route path="/settings" element={<Settings />} />
-          <Route path="/profile" element={<UserProfile />} />
+          <Route
+            path="/dashboard/*"
+            element={
+              <SidebarLayout>
+                <Routes>
+                  <Route index element={<Dashboard />} />
+                  <Route path="projects" element={<ProjectsOverview />} />
+                  <Route path="projects/:id" element={<ProjectPage />} />
+                  <Route path="reports" element={<Reports />} />
+                  <Route path="meetings" element={<Meetings />} />
+                  <Route path="tasks" element={<TasksOverview />} /> 
+                </Routes>
+              </SidebarLayout>
+            }
+          />
+          <Route
+            path="/settings"
+            element={
+              <SidebarLayout>
+                <Settings />
+              </SidebarLayout>
+            }
+          />
+          <Route
+            path="/profile"
+            element={
+              <SidebarLayout>
+                <UserProfile />
+              </SidebarLayout>
+            }
+          />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password/:token" element={<ResetPassword />} />
           <Route path="/verify-email/:token" element={<VerifyEmail />} />

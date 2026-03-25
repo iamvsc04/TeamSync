@@ -102,26 +102,20 @@ const NotificationSchema = new mongoose.Schema(
   }
 );
 
-// Indexes for better query performance
 NotificationSchema.index({ recipient: 1, isRead: 1 });
 NotificationSchema.index({ recipient: 1, createdAt: -1 });
 NotificationSchema.index({ recipient: 1, category: 1 });
 NotificationSchema.index({ recipient: 1, priority: 1 });
-NotificationSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 }); // TTL index for expired notifications
+NotificationSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 
-// Virtual for checking if notification is expired
 NotificationSchema.virtual('isExpired').get(function() {
   if (!this.expiresAt) return false;
   return new Date() > this.expiresAt;
 });
-
-// Virtual for checking if notification is recent (within 24 hours)
 NotificationSchema.virtual('isRecent').get(function() {
   const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
   return this.createdAt > twentyFourHoursAgo;
 });
-
-// Pre-save middleware to set category based on type
 NotificationSchema.pre('save', function(next) {
   if (!this.category) {
     switch (this.type) {

@@ -1,5 +1,7 @@
+import { API_BASE } from '../config/api';
 import React, { useEffect, useMemo, useState } from "react";
 import {
+
   Box,
   Paper,
   Typography,
@@ -25,6 +27,7 @@ import EventIcon from "@mui/icons-material/Event";
 import VideoCallIcon from "@mui/icons-material/VideoCall";
 import PlaceIcon from "@mui/icons-material/Place";
 import { useTheme } from "../ThemeContext";
+
 
 export default function Meetings() {
   const { theme } = useTheme();
@@ -53,7 +56,7 @@ export default function Meetings() {
   const fetchProjects = async () => {
     try {
       const res = await fetch(
-        "http://localhost:5000/api/projects/member-projects",
+        `${API_BASE}/projects/member-projects`,
         {
           headers: {
             "Content-Type": "application/json",
@@ -76,10 +79,10 @@ export default function Meetings() {
     try {
       let url = "";
       if (filters.projectId && filters.projectId !== "all") {
-        url = `http://localhost:5000/api/meetings/project/${filters.projectId}`;
+        url = `${API_BASE}/meetings/project/${filters.projectId}`;
       } else {
         // fall back to my-meetings when no specific project is selected
-        url = "http://localhost:5000/api/meetings/my-meetings";
+        url = `${API_BASE}/meetings/my-meetings`;
       }
       const res = await fetch(url, {
         headers: { Authorization: `Bearer ${token}` },

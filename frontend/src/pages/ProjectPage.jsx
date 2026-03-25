@@ -1,6 +1,8 @@
+import { API_BASE, SOCKET_URL } from '../config/api';
 import React, { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
+
   Box,
   Typography,
   Chip,
@@ -37,6 +39,8 @@ import {
   Backdrop,
   LinearProgress,
   Alert,
+  Tabs,
+  Tab,
 } from "@mui/material";
 import EditIcon from "@mui/icons-material/Edit";
 import GroupIcon from "@mui/icons-material/Group";
@@ -65,36 +69,74 @@ import ReplyIcon from "@mui/icons-material/Reply";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import DownloadIcon from "@mui/icons-material/Download";
 import TaskManagement from "../components/TaskManagement";
-import UploadIcon from "@mui/icons-material/Upload";
 import MeetingManagement from "../components/MeetingManagement";
 import FileUpload from "../components/FileUpload";
 import FileManager from "../components/FileManager";
+import VideoCallIcon from "@mui/icons-material/VideoCall";
+import FolderIcon from "@mui/icons-material/Folder";
+import DashboardIcon from "@mui/icons-material/Dashboard";
+
+
+// TabPanel Helper
+function TabPanel(props) {
+  const { children, value, index, ...other } = props;
+  return (
+    <div
+      role="tabpanel"
+      hidden={value !== index}
+      id={`project-tabpanel-${index}`}
+      aria-labelledby={`project-tab-${index}`}
+      {...other}
+    >
+      {value === index && (
+        <Box sx={{ py: 3 }}>
+          {children}
+        </Box>
+      )}
+    </div>
+  );
+}
 
 // Professional ProjectChatDrawer
 function ProjectChatDrawer({ projectId, open, onClose }) {
   const { user } = useAuth();
   const { theme } = useTheme();
   const [messages, setMessages] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
   const [input, setInput] = useState("");
   const [replyTo, setReplyTo] = useState(null);
   const socketRef = useRef(null);
   const messagesEndRef = useRef(null);
+  const [typingUsers, setTypingUsers] = useState({});
 
   useEffect(() => {
     if (!open) return;
-    socketRef.current = io("http://localhost:5000");
+    socketRef.current = io(SOCKET_URL);
     socketRef.current.emit("joinProjectRoom", projectId);
     const fetchHistory = async (page = 1) => {
-      const token = localStorage.getItem("token");
-      const res = await fetch(
-        `http://localhost:5000/api/projects/${projectId}/chat?page=${page}&limit=50`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
+      try {
+        setLoading(true);
+        setError("");
+        const token = localStorage.getItem("token");
+        const res = await fetch(
+          `${API_BASE}/projects/${projectId}/chat?page=${page}&limit=50`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
+        if (res.ok) {
+          const data = await res.json();
+          setMessages(data.messages || []);
+        } else {
+          const errData = await res.json();
+          setError(errData.message || `Failed to load chat history`);
         }
-      );
-      if (res.ok) {
-        const data = await res.json();
-        setMessages(data.messages || []);
+      } catch (err) {
+        setError("Connection error. Is the server running?");
+        console.error("Chat fetch error:", err);
+      } finally {
+        setLoading(false);
       }
     };
     fetchHistory();
@@ -156,7 +198,7 @@ function ProjectChatDrawer({ projectId, open, onClose }) {
     const token = localStorage.getItem("token");
     const nextPage = chatPage + 1;
     const res = await fetch(
-      `http://localhost:5000/api/projects/${projectId}/chat?page=${nextPage}&limit=50`,
+      `${API_BASE}/projects/${projectId}/chat?page=${nextPage}&limit=50`,
       {
         headers: { Authorization: `Bearer ${token}` },
       }
@@ -168,13 +210,13 @@ function ProjectChatDrawer({ projectId, open, onClose }) {
     }
   };
 
-  const [typingUsers, setTypingUsers] = useState({});
+
   const handleInputChange = (e) => {
     const text = e.target.value;
     setInput(text);
     if (socketRef.current) {
       if (text.trim()) {
-        socketRef.current.emit("typing", {
+        socketRef.current.emit(`typing`, {
           projectId,
           senderId: user.id || user._id,
           senderName: user.name,
@@ -253,6 +295,19 @@ function ProjectChatDrawer({ projectId, open, onClose }) {
               Load older messages
             </Button>
           </Box>
+          {loading && messages.length === 0 && (
+            <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+              <CircularProgress size={24} />
+            </Box>
+          )}
+          {error && (
+            <Typography color="error" align="center" sx={{ mb: 2 }}>{error}</Typography>
+          )}
+          {!loading && !error && messages.length === 0 && (
+            <Typography align="center" color="text.secondary" sx={{ mt: 4 }}>
+              No messages yet. Start the conversation!
+            </Typography>
+          )}
           {Object.keys(typingUsers).length > 0 && (
             <Typography
               variant="caption"
@@ -545,7 +600,7 @@ function ProjectChatDrawer({ projectId, open, onClose }) {
 }
 
 // Professional Admin View Component
-function AdminProjectView({
+function ProjectView({
   project,
   onProjectUpdate,
   onJoinRequestAction,
@@ -556,9 +611,16 @@ function AdminProjectView({
   uploadSuccess,
   canManageProject,
   setChatDrawerOpen,
+  fetchProject,
+  toggleTheme,
 }) {
   const { user } = useAuth();
   const { theme } = useTheme();
+  const [currentTab, setCurrentTab] = useState(0);
+  
+  const handleTabChange = (event, newValue) => {
+    setCurrentTab(newValue);
+  };
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editLoading, setEditLoading] = useState(false);
   const [editForm, setEditForm] = useState({ name: "", description: "" });
@@ -597,7 +659,7 @@ function AdminProjectView({
     const token = localStorage.getItem("token");
     try {
       const res = await fetch(
-        `http://localhost:5000/api/projects/${project._id}`,
+        `${API_BASE}/projects/${project._id}`,
         {
           method: "PUT",
           headers: {
@@ -630,7 +692,7 @@ function AdminProjectView({
     const token = localStorage.getItem("token");
     try {
       const res = await fetch(
-        `http://localhost:5000/api/projects/${project._id}/add-member-by-email`,
+        `${API_BASE}/projects/${project._id}/add-member-by-email`,
         {
           method: "POST",
           headers: {
@@ -658,7 +720,7 @@ function AdminProjectView({
     setAssignTaskError("");
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch(`http://localhost:5000/api/tasks`, {
+      const res = await fetch(`${API_BASE}/tasks`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -688,7 +750,7 @@ function AdminProjectView({
     try {
       const token = localStorage.getItem("token");
       const res = await fetch(
-        `http://localhost:5000/api/projects/${project._id}/members/${selectedMember._id}`,
+        `${API_BASE}/projects/${project._id}/members/${selectedMember._id}`,
         {
           method: "DELETE",
           headers: {
@@ -716,7 +778,7 @@ function AdminProjectView({
     try {
       const token = localStorage.getItem("token");
       const res = await fetch(
-        `http://localhost:5000/api/projects/${project._id}/members/${selectedMember._id}/role`,
+        `${API_BASE}/projects/${project._id}/members/${selectedMember._id}/role`,
         {
           method: "PATCH",
           headers: {
@@ -745,7 +807,7 @@ function AdminProjectView({
     const token = localStorage.getItem("token");
     try {
       const res = await fetch(
-        `http://localhost:5000/api/projects/${project._id}/documents/${doc._id}/download`,
+        `${API_BASE}/projects/${project._id}/documents/${doc._id}/download`,
         {
           method: "GET",
           headers: {
@@ -776,7 +838,7 @@ function AdminProjectView({
     const token = localStorage.getItem("token");
     try {
       const res = await fetch(
-        `http://localhost:5000/api/projects/${project._id}/documents/${doc._id}/preview`,
+        `${API_BASE}/projects/${project._id}/documents/${doc._id}/preview`,
         {
           method: "GET",
           headers: {
@@ -810,7 +872,7 @@ function AdminProjectView({
     const token = localStorage.getItem("token");
     try {
       const res = await fetch(
-        `http://localhost:5000/api/projects/${project._id}/documents/${doc._id}`,
+        `${API_BASE}/projects/${project._id}/documents/${doc._id}`,
         {
           method: "DELETE",
           headers: {
@@ -846,503 +908,305 @@ function AdminProjectView({
       name: "Share Code",
       action: () => setJoinCodeModalOpen(true),
     },
+    {
+      icon: <ChatIcon />,
+      name: "Team Chat",
+      action: () => setChatDrawerOpen(true),
+    },
   ];
 
   return (
-    <Box sx={{ width: "97vw", py: 4, px: { xs: 2, md: 4 } }}>
-      {/* Professional Admin Badge */}
-      <Box sx={{ position: "absolute", top: 16, left: 16, zIndex: 2 }}>
-        <Chip
-          label="Admin View"
-          color="primary"
-          icon={<AdminPanelSettingsIcon />}
-          sx={{
-            fontWeight: 600,
-            fontSize: 14,
-            bgcolor: "#1976d2",
-            color: "white",
-          }}
-        />
-      </Box>
-
-      {/* Professional Project Header */}
-      <Paper
-        sx={{
-          p: 4,
-          mb: 4,
-          bgcolor: theme === "dark" ? "#2d2d2d" : "#fff",
-          borderRadius: 2,
-          boxShadow:
-            theme === "dark"
-              ? "0 4px 20px rgba(0,0,0,0.3)"
-              : "0 4px 20px rgba(0,0,0,0.1)",
-          border: `1px solid ${theme === "dark" ? "#444" : "#e0e0e0"}`,
-          position: "relative",
-        }}
-      >
-        <Box
-          display="flex"
-          justifyContent="space-between"
-          alignItems="flex-start"
-          mb={3}
-        >
-          <Box sx={{ flex: 1, mr: 3 }}>
-            <Typography
-              variant="h3"
-              fontWeight={700}
-              color="primary"
-              mb={1}
-              sx={{ color: theme === "dark" ? "#fff" : "#1976d2" }}
-            >
-              {project.name}
-            </Typography>
-            <Typography
-              variant="h6"
-              color="text.secondary"
-              mb={2}
-              sx={{ color: theme === "dark" ? "#ccc" : "#666" }}
-            >
-              {project.description || "No description available"}
-            </Typography>
-            <Box display="flex" gap={1} flexWrap="wrap">
-              <Chip
-                label={project.status || "active"}
-                color={project.status === "completed" ? "success" : "primary"}
-                size="small"
-              />
-              <Chip
-                label={`Created by ${project.createdBy?.name || "Unknown"}`}
-                color="secondary"
-                size="small"
-              />
-              <Chip
-                label={`${project.members?.length || 0} members`}
-                color="info"
-                size="small"
-              />
-            </Box>
-          </Box>
-          <Box
-            display="flex"
-            gap={3}
-            sx={{ flexShrink: 0, alignItems: "flex-start" }}
-          >
-            <Button
-              variant="contained"
-              startIcon={<EditIcon />}
-              onClick={openEditModal}
-              sx={{
-                borderRadius: 2,
-                bgcolor: "#1976d2",
-                "&:hover": { bgcolor: "#1565c0" },
-                minWidth: "140px",
-                height: "40px",
-              }}
-            >
-              Edit Project
-            </Button>
-            <Button
-              variant="outlined"
-              startIcon={<ShareIcon />}
-              onClick={() => setJoinCodeModalOpen(true)}
-              sx={{
-                borderRadius: 2,
-                borderColor: "#1976d2",
-                color: "#1976d2",
-                "&:hover": {
-                  borderColor: "#1565c0",
-                  bgcolor: "rgba(25, 118, 210, 0.04)",
-                },
-                minWidth: "140px",
-                height: "40px",
-              }}
-            >
-              Share Code
-            </Button>
-            <Tooltip title="Project Chat" placement="top">
-              <IconButton
-                onClick={() => setChatDrawerOpen(true)}
-                sx={{
-                  bgcolor: theme === "dark" ? "#1976d2" : "#1976d2",
-                  color: "white",
-                  width: 48,
-                  height: 48,
-                  "&:hover": {
-                    bgcolor: theme === "dark" ? "#1565c0" : "#1565c0",
-                    transform: "scale(1.05)",
-                  },
-                  transition: "all 0.2s ease",
-                  boxShadow:
-                    theme === "dark"
-                      ? "0 4px 12px rgba(25, 118, 210, 0.3)"
-                      : "0 4px 12px rgba(25, 118, 210, 0.2)",
-                }}
-              >
-                <ChatIcon />
-              </IconButton>
-            </Tooltip>
-            <Tooltip title="Toggle Theme" placement="top">
-              <IconButton
-                onClick={() => {
-                  const newTheme = theme === "dark" ? "light" : "dark";
-                  localStorage.setItem("theme", newTheme);
-                  window.location.reload();
-                }}
-                sx={{
-                  bgcolor: theme === "dark" ? "#fbbf24" : "#1e293b",
-                  color: theme === "dark" ? "#1e293b" : "#fbbf24",
-                  width: 48,
-                  height: 48,
-                  "&:hover": {
-                    bgcolor: theme === "dark" ? "#f59e0b" : "#334155",
-                    transform: "scale(1.05)",
-                  },
-                  transition: "all 0.2s ease",
-                  boxShadow:
-                    theme === "dark"
-                      ? "0 4px 12px rgba(251, 191, 36, 0.3)"
-                      : "0 4px 12px rgba(30, 41, 59, 0.3)",
-                }}
-              >
-                {theme === "dark" ? "☀️" : "🌙"}
-              </IconButton>
-            </Tooltip>
-          </Box>
-        </Box>
-      </Paper>
-
-      <Grid container spacing={3}>
-        {/* Members Management */}
-        <Grid item xs={12} md={6}>
-          <Paper
-            sx={{
-              p: 3,
-              bgcolor: theme === "dark" ? "#2d2d2d" : "#fff",
-              borderRadius: 2,
-              boxShadow:
-                theme === "dark"
-                  ? "0 2px 10px rgba(0,0,0,0.2)"
-                  : "0 2px 10px rgba(0,0,0,0.1)",
-              border: `1px solid ${theme === "dark" ? "#444" : "#e0e0e0"}`,
-            }}
-          >
-            <Box
-              display="flex"
-              justifyContent="space-between"
-              alignItems="center"
-              mb={3}
-            >
-              <Typography
-                variant="h5"
-                fontWeight={600}
-                display="flex"
-                alignItems="center"
-                gap={1}
-                sx={{ color: theme === "dark" ? "#fff" : "#333" }}
-              >
-                <GroupIcon color="primary" />
-                Team Members
+    <Box sx={{ width: "100%", minHeight: "100vh", bgcolor: "transparent" }}>
+      {/* Premium Header Section */}
+      <Box sx={{ 
+        p: { xs: 2, md: 4 }, 
+        pt: { xs: 2, md: 6 },
+        background: theme === 'dark' 
+          ? 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)' 
+          : 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)',
+        borderBottom: `1px solid ${theme === 'dark' ? '#334155' : '#e2e8f0'}`,
+        mb: 2
+      }}>
+        <Grid container spacing={3} alignItems="center">
+          <Grid item xs={12} md={8}>
+            <Box display="flex" alignItems="center" gap={2} mb={1}>
+              <Typography variant="h3" sx={{ fontWeight: 800, letterSpacing: '-0.02em', color: theme === 'dark' ? '#f8fafc' : '#0f172a' }}>
+                {project.name}
               </Typography>
+              <Chip 
+                label={project.status || "Active"} 
+                color={project.status === 'completed' ? 'success' : 'primary'}
+                sx={{ fontWeight: 600, borderRadius: '8px' }}
+              />
+              {canManageProject && (
+                <Chip
+                    label="Admin"
+                    color="secondary"
+                    icon={<AdminPanelSettingsIcon />}
+                    sx={{ fontWeight: 600, borderRadius: '8px' }}
+                />
+              )}
+            </Box>
+            <Typography variant="h6" color="text.secondary" sx={{ opacity: 0.8, maxWidth: '800px', mb: 2 }}>
+              {project.description || "Project collaboration space"}
+            </Typography>
+            <Box display="flex" gap={2} flexWrap="wrap">
+              <Box display="flex" alignItems="center" gap={0.5}>
+                <PersonIcon fontSize="small" color="action" />
+                <Typography variant="body2" fontWeight={500}>Created by {project.createdBy?.name}</Typography>
+              </Box>
+              <Box display="flex" alignItems="center" gap={0.5}>
+                <GroupIcon fontSize="small" color="action" />
+                <Typography variant="body2" fontWeight={500}>{project.members?.length} Members</Typography>
+              </Box>
+              <Box display="flex" alignItems="center" gap={0.5}>
+                <CalendarTodayIcon fontSize="small" color="action" />
+                <Typography variant="body2" fontWeight={500}>{new Date(project.createdAt).toLocaleDateString()}</Typography>
+              </Box>
+            </Box>
+          </Grid>
+          <Grid item xs={12} md={4}>
+            <Box display="flex" justifyContent={{ xs: 'flex-start', md: 'flex-end' }} gap={2}>
+              <Tooltip title="Toggle Theme" placement="top">
+                <IconButton
+                    onClick={toggleTheme}
+                    sx={{
+                        bgcolor: theme === "dark" ? "#fbbf24" : "#1e293b",
+                        color: theme === "dark" ? "#1e293b" : "#fbbf24",
+                        width: 48,
+                        height: 48,
+                        "&:hover": {
+                            bgcolor: theme === "dark" ? "#f59e0b" : "#334155",
+                            transform: "scale(1.05)",
+                        },
+                        transition: "all 0.2s ease",
+                    }}
+                >
+                    {theme === "dark" ? "☀️" : "🌙"}
+                </IconButton>
+              </Tooltip>
               <Button
                 variant="contained"
-                onClick={() => setAddMemberOpen(true)}
-                sx={{
-                  borderRadius: 2,
-                  bgcolor: "#4caf50",
-                  "&:hover": { bgcolor: "#388e3c" },
-                }}
+                startIcon={<ChatIcon />}
+                onClick={() => setChatDrawerOpen(true)}
+                sx={{ borderRadius: '12px', px: 3, py: 1.2, fontWeight: 600, textTransform: 'none', boxShadow: '0 4px 14px 0 rgba(0,118,255,0.39)' }}
               >
-                Add Member
+                Team Chat
               </Button>
             </Box>
-
-            <List>
-              {project.members && project.members.length > 0 ? (
-                project.members.map((member, index) => (
-                  <ListItem
-                    key={member._id}
-                    sx={{
-                      mb: 1,
-                      borderRadius: 2,
-                      bgcolor: theme === "dark" ? "#333" : "#f8f9fa",
-                      border: `1px solid ${
-                        theme === "dark" ? "#444" : "#e9ecef"
-                      }`,
-                    }}
-                    secondaryAction={
-                      member._id !== user?.id && (
-                        <Box display="flex" gap={1}>
-                          <Tooltip title="Assign Role">
-                            <IconButton
-                              size="small"
-                              onClick={() => {
-                                setSelectedMember(member);
-                                setRoleForm({ role: member.role || "member" });
-                                setAssignRoleOpen(true);
-                              }}
-                              sx={{ color: "#9c27b0" }}
-                            >
-                              <AdminPanelSettingsIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-                          <Tooltip title="Remove Member">
-                            <IconButton
-                              size="small"
-                              color="error"
-                              onClick={() => {
-                                setSelectedMember(member);
-                                setRemoveMemberOpen(true);
-                              }}
-                            >
-                              <CloseIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-                        </Box>
-                      )
-                    }
-                  >
-                    <ListItemAvatar>
-                      <Avatar
-                        sx={{
-                          bgcolor:
-                            member.role === "admin"
-                              ? "primary.main"
-                              : "secondary.main",
-                        }}
-                      >
-                        {member.name
-                          ? member.name.charAt(0).toUpperCase()
-                          : "M"}
-                      </Avatar>
-                    </ListItemAvatar>
-                    <ListItemText
-                      primary={
-                        <Box display="flex" alignItems="center" gap={1}>
-                          <Typography
-                            fontWeight={600}
-                            sx={{ color: theme === "dark" ? "#fff" : "#333" }}
-                          >
-                            {member.name}
-                          </Typography>
-                          {member.role === "admin" && (
-                            <Chip label="Admin" size="small" color="primary" />
-                          )}
-                        </Box>
-                      }
-                      secondary={
-                        <Typography
-                          sx={{ color: theme === "dark" ? "#ccc" : "#666" }}
-                        >
-                          {member.email}
-                        </Typography>
-                      }
-                    />
-                  </ListItem>
-                ))
-              ) : (
-                <Typography color="text.secondary" textAlign="center" py={2}>
-                  No members yet. Add members to get started!
-                </Typography>
-              )}
-            </List>
-          </Paper>
+          </Grid>
         </Grid>
 
-        {/* Documents Section (Enhanced) */}
-        <Grid item xs={12} md={6}>
-          <Paper sx={{ p: 3, mb: 3, bgcolor: theme === "dark" ? "#2d2d2d" : "#fff" }}>
-            <Typography variant="h6" gutterBottom sx={{ color: theme === "dark" ? "#fff" : "#333" }}>
-              Project Documents
-            </Typography>
-
-            <Box sx={{ mb: 2 }}>
-              <FileUpload
-                projectId={project._id}
-                onUploaded={(newFiles) => {
-                  // Refresh project after upload; newFiles returned from FileUpload
-                  fetchProject();
-                }}
-              />
-            </Box>
-
-            <FileManager
-              projectId={project._id}
-              files={project.documents || []}
-              viewMode="list"
-              onFileDeleted={() => fetchProject()}
-            />
-          </Paper>
-        </Grid>
-
-        {/* Task Management Section */}
-        <Grid item xs={12}>
-          <Paper
-            sx={{ p: 3, mb: 3, bgcolor: theme === "dark" ? "#2d2d2d" : "#fff" }}
+        {/* Navigation Tabs */}
+        <Box sx={{ mt: 4 }}>
+          <Tabs 
+            value={currentTab} 
+            onChange={handleTabChange}
+            variant="scrollable"
+            scrollButtons="auto"
+            sx={{
+              '& .MuiTabs-indicator': { height: 3, borderRadius: '3px 3px 0 0' },
+              '& .MuiTab-root': { 
+                fontWeight: 600, 
+                fontSize: '1rem', 
+                textTransform: 'none',
+                minWidth: 120,
+                color: theme === 'dark' ? '#94a3b8' : '#64748b',
+                '&.Mui-selected': {
+                    color: theme === 'dark' ? '#fff' : '#1976d2'
+                }
+              }
+            }}
           >
-            <Typography
-              variant="h6"
-              gutterBottom
-              sx={{ color: theme === "dark" ? "#fff" : "#333" }}
-            >
-              Task Management
-            </Typography>
-            <TaskManagement
-              projectId={project._id}
-              onTaskUpdate={() => onProjectUpdate()}
-            />
-          </Paper>
-        </Grid>
+            <Tab label="Overview" icon={<DashboardIcon sx={{ fontSize: 20 }} />} iconPosition="start" />
+            <Tab label="Tasks" icon={<AssignmentIcon sx={{ fontSize: 20 }} />} iconPosition="start" />
+            <Tab label="Meetings" icon={<VideoCallIcon sx={{ fontSize: 20 }} />} iconPosition="start" />
+            <Tab label="Documents" icon={<FolderIcon sx={{ fontSize: 20 }} />} iconPosition="start" />
+            <Tab label="Team" icon={<GroupIcon sx={{ fontSize: 20 }} />} iconPosition="start" />
+          </Tabs>
+        </Box>
+      </Box>
 
-        {/* Meeting Management Section */}
-        <Grid item xs={12}>
-          <Paper
-            sx={{ p: 3, mb: 3, bgcolor: theme === "dark" ? "#2d2d2d" : "#fff" }}
-          >
-            <Typography
-              variant="h6"
-              gutterBottom
-              sx={{ color: theme === "dark" ? "#fff" : "#333" }}
-            >
-              Meeting Management
-            </Typography>
-            <MeetingManagement
-              projectId={project._id}
-              onMeetingUpdate={() => onProjectUpdate()}
-            />
-          </Paper>
-        </Grid>
-
-        {/* Join Requests */}
-        {project.joinRequests &&
-          project.joinRequests.filter((jr) => jr.status === "pending").length >
-            0 && (
-            <Grid item xs={12}>
-              <Paper
-                sx={{
-                  p: 3,
-                  bgcolor: theme === "dark" ? "#2d2d2d" : "#fff",
-                  borderRadius: 2,
-                  boxShadow:
-                    theme === "dark"
-                      ? "0 2px 10px rgba(0,0,0,0.2)"
-                      : "0 2px 10px rgba(0,0,0,0.1)",
-                  border: `1px solid ${theme === "dark" ? "#444" : "#e0e0e0"}`,
-                }}
-              >
-                <Typography
-                  variant="h5"
-                  fontWeight={600}
-                  mb={3}
-                  sx={{ color: theme === "dark" ? "#fff" : "#333" }}
+      {/* Tab Panels Content */}
+      <Box sx={{ p: { xs: 2, md: 4 }, pt: 0 }}>
+        <TabPanel value={currentTab} index={0}>
+          <Grid container spacing={3}>
+            {/* Project Stats Summary */}
+            <Grid item xs={12} md={4}>
+              <Card sx={{ borderRadius: '16px', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)', bgcolor: theme === 'dark' ? '#1e293b' : '#fff', border: '1px solid', borderColor: theme === 'dark' ? '#334155' : '#f1f5f9' }}>
+                <CardContent sx={{ p: 3 }}>
+                  <Typography variant="overline" color="text.secondary" fontWeight={700}>Project Status</Typography>
+                  <Typography variant="h4" sx={{ mt: 1, display: 'flex', alignItems: 'center', gap: 1, color: theme === 'dark' ? '#fff' : '#0f172a' }}>
+                    <TrendingUpIcon color="primary" /> {project.status?.toUpperCase() || 'ACTIVE'}
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <Card sx={{ borderRadius: '16px', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)', bgcolor: theme === 'dark' ? '#1e293b' : '#fff', border: '1px solid', borderColor: theme === 'dark' ? '#334155' : '#f1f5f9' }}>
+                <CardContent sx={{ p: 3 }}>
+                  <Typography variant="overline" color="text.secondary" fontWeight={700}>Team Size</Typography>
+                  <Typography variant="h4" sx={{ mt: 1, display: 'flex', alignItems: 'center', gap: 1, color: theme === 'dark' ? '#fff' : '#0f172a' }}>
+                    <GroupIcon color="primary" /> {project.members?.length || 0} Members
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <Card sx={{ borderRadius: '16px', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)', bgcolor: theme === 'dark' ? '#1e293b' : '#fff', border: '1px solid', borderColor: theme === 'dark' ? '#334155' : '#f1f5f9' }}>
+                <CardContent sx={{ p: 3 }}>
+                  <Typography variant="overline" color="text.secondary" fontWeight={700}>Assets</Typography>
+                  <Typography variant="h4" sx={{ mt: 1, display: 'flex', alignItems: 'center', gap: 1, color: theme === 'dark' ? '#fff' : '#0f172a' }}>
+                    <FolderIcon color="primary" /> {project.documents?.length || 0} Files
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+            
+            {/* Pending Requests Notification for Admin */}
+            {canManageProject && project.joinRequests?.filter(jr => jr.status === 'pending').length > 0 && (
+              <Grid item xs={12}>
+                <Alert 
+                  severity="info" 
+                  action={
+                    <Button color="inherit" size="small" onClick={() => setCurrentTab(4)}>
+                      VIEW REQUESTS
+                    </Button>
+                  }
+                  sx={{ borderRadius: '12px' }}
                 >
-                  Pending Join Requests
-                </Typography>
-                <List>
-                  {project.joinRequests
-                    .filter((jr) => jr.status === "pending")
-                    .map((jr) => (
-                      <ListItem
-                        key={jr.user._id || jr.user}
-                        sx={{
-                          mb: 2,
-                          borderRadius: 2,
-                          bgcolor: theme === "dark" ? "#333" : "#f8f9fa",
-                          border: `1px solid ${
-                            theme === "dark" ? "#444" : "#e9ecef"
-                          }`,
-                          flexDirection: "column",
-                          alignItems: "flex-start",
-                          p: 2,
+                  There are {project.joinRequests.filter(jr => jr.status === 'pending').length} pending join requests.
+                </Alert>
+              </Grid>
+            )}
+
+            {/* Quick Actions / Info */}
+            <Grid item xs={12} md={8}>
+               <Paper sx={{ p: 3, borderRadius: '16px', bgcolor: theme === 'dark' ? '#1e293b' : '#fff', border: '1px solid', borderColor: theme === 'dark' ? '#334155' : '#f1f5f9' }}>
+                 <Typography variant="h6" gutterBottom fontWeight={700} sx={{ color: theme === 'dark' ? '#fff' : '#0f172a' }}>Project Details</Typography>
+                 <Divider sx={{ mb: 2, borderColor: theme === 'dark' ? '#334155' : '#f1f5f9' }} />
+                 <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap', color: theme === 'dark' ? '#cbd5e1' : '#475569' }}>
+                   {project.description || "No detailed description provided."}
+                 </Typography>
+               </Paper>
+            </Grid>
+          </Grid>
+        </TabPanel>
+
+        <TabPanel value={currentTab} index={1}>
+          <Paper sx={{ p: 3, borderRadius: '16px', bgcolor: theme === 'dark' ? '#1e293b' : '#fff', border: '1px solid', borderColor: theme === 'dark' ? '#334155' : '#f1f5f9' }}>
+            <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+              <Typography variant="h5" fontWeight={700} sx={{ color: theme === 'dark' ? '#fff' : '#0f172a' }}>Task Management</Typography>
+              {canManageProject && (
+                <Button variant="contained" startIcon={<AddIcon />} onClick={() => setAssignTaskOpen(true)} sx={{ borderRadius: '10px' }}>
+                  Assign New Task
+                </Button>
+              )}
+            </Box>
+            <TaskManagement projectId={project._id} onTaskUpdate={onProjectUpdate} />
+          </Paper>
+        </TabPanel>
+
+        <TabPanel value={currentTab} index={2}>
+          <Paper sx={{ p: 3, borderRadius: '16px', bgcolor: theme === 'dark' ? '#1e293b' : '#fff', border: '1px solid', borderColor: theme === 'dark' ? '#334155' : '#f1f5f9' }}>
+            <MeetingManagement projectId={project._id} onMeetingUpdate={onProjectUpdate} />
+          </Paper>
+        </TabPanel>
+
+        <TabPanel value={currentTab} index={3}>
+          <Paper sx={{ p: 3, borderRadius: '16px', bgcolor: theme === 'dark' ? '#1e293b' : '#fff', border: '1px solid', borderColor: theme === 'dark' ? '#334155' : '#f1f5f9' }}>
+            <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+              <Typography variant="h5" fontWeight={700} sx={{ color: theme === 'dark' ? '#fff' : '#0f172a' }}>Files & Documents</Typography>
+              <FileUpload projectId={project._id} onUploaded={() => fetchProject()} />
+            </Box>
+            <FileManager projectId={project._id} files={project.documents || []} viewMode="grid" onFileDeleted={() => fetchProject()} />
+          </Paper>
+        </TabPanel>
+
+        <TabPanel value={currentTab} index={4}>
+           <Grid container spacing={3}>
+             {/* Member List */}
+             <Grid item xs={12} md={canManageProject ? 8 : 12}>
+                <Paper sx={{ p: 3, borderRadius: '16px', bgcolor: theme === 'dark' ? '#1e293b' : '#fff', border: '1px solid', borderColor: theme === 'dark' ? '#334155' : '#f1f5f9' }}>
+                  <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+                    <Typography variant="h5" fontWeight={700} sx={{ color: theme === 'dark' ? '#fff' : '#0f172a' }}>Team Members</Typography>
+                    {canManageProject && (
+                      <Button variant="outlined" startIcon={<PersonIcon />} onClick={() => setAddMemberOpen(true)} sx={{ borderRadius: '10px' }}>
+                        Invite Member
+                      </Button>
+                    )}
+                  </Box>
+                  <List>
+                    {project.members?.map((member) => (
+                      <ListItem 
+                        key={member._id}
+                        sx={{ 
+                          mb: 1, 
+                          borderRadius: '12px', 
+                          border: '1px solid',
+                          borderColor: theme === 'dark' ? '#334155' : '#f1f5f9',
+                          bgcolor: theme === 'dark' ? '#0f172a' : '#f8fafc',
+                          p: 2
                         }}
+                        secondaryAction={
+                          canManageProject && member._id !== user?.id && (
+                            <Box display="flex" gap={1}>
+                              <IconButton size="small" color="primary" onClick={() => { setSelectedMember(member); setRoleForm({role: member.role || 'member'}); setAssignRoleOpen(true); }}>
+                                <AdminPanelSettingsIcon />
+                              </IconButton>
+                              <IconButton size="small" color="error" onClick={() => { setSelectedMember(member); setRemoveMemberOpen(true); }}>
+                                <CloseIcon />
+                              </IconButton>
+                            </Box>
+                          )
+                        }
                       >
-                        <Box
-                          display="flex"
-                          alignItems="center"
-                          width="100%"
-                          mb={2}
-                        >
-                          <Avatar sx={{ bgcolor: "#4caf50", mr: 2 }}>
-                            <PersonIcon />
+                        <ListItemAvatar>
+                          <Avatar sx={{ bgcolor: member.role === 'admin' ? 'primary.main' : 'secondary.main' }}>
+                            {member.name?.charAt(0)}
                           </Avatar>
-                          <Box sx={{ flex: 1, minWidth: 0 }}>
-                            <Typography
-                              variant="body1"
-                              fontWeight={600}
-                              sx={{
-                                color: theme === "dark" ? "#fff" : "#333",
-                                mb: 0.5,
-                                wordBreak: "break-word",
-                              }}
-                            >
-                              {jr.user && (jr.user.name || jr.user.email)
-                                ? `${jr.user.name || ""} ${
-                                    jr.user.email ? `(${jr.user.email})` : ""
-                                  }`.trim()
-                                : "Unknown user"}
-                            </Typography>
-                            <Typography
-                              variant="body2"
-                              sx={{
-                                color: theme === "dark" ? "#ccc" : "#666",
-                                fontStyle: "italic",
-                              }}
-                            >
-                              Wants to join the project
-                            </Typography>
-                          </Box>
-                        </Box>
-                        <Box
-                          display="flex"
-                          gap={2}
-                          width="100%"
-                          justifyContent="flex-end"
-                        >
-                          <Button
-                            size="small"
-                            color="success"
-                            variant="contained"
-                            startIcon={<CheckIcon />}
-                            onClick={() =>
-                              onJoinRequestAction(
-                                jr.user._id || jr.user,
-                                "approved"
-                              )
-                            }
-                            sx={{
-                              borderRadius: 2,
-                              minWidth: "100px",
-                              height: "36px",
-                            }}
-                          >
-                            Approve
-                          </Button>
-                          <Button
-                            size="small"
-                            color="error"
-                            variant="outlined"
-                            startIcon={<ClearIcon />}
-                            onClick={() =>
-                              onJoinRequestAction(
-                                jr.user._id || jr.user,
-                                "rejected"
-                              )
-                            }
-                            sx={{
-                              borderRadius: 2,
-                              minWidth: "100px",
-                              height: "36px",
-                            }}
-                          >
-                            Reject
-                          </Button>
-                        </Box>
+                        </ListItemAvatar>
+                        <ListItemText 
+                          primary={<Typography fontWeight={600} sx={{ color: theme === 'dark' ? '#fff' : '#0f172a' }}>{member.name} {member._id === user?.id && '(You)'}</Typography>}
+                          secondary={member.email}
+                        />
+                        <Chip label={member.role || 'Member'} size="small" sx={{ ml: 2, borderRadius: '6px' }} />
                       </ListItem>
                     ))}
-                </List>
-              </Paper>
-            </Grid>
-          )}
-      </Grid>
+                  </List>
+                </Paper>
+             </Grid>
+
+             {/* Join Requests for Admin */}
+             {canManageProject && (
+               <Grid item xs={12} md={4}>
+                  <Paper sx={{ p: 3, borderRadius: '16px', bgcolor: theme === 'dark' ? '#1e293b' : '#fff', border: '1px solid', borderColor: theme === 'dark' ? '#334155' : '#f1f5f9' }}>
+                    <Typography variant="h6" fontWeight={700} gutterBottom sx={{ color: theme === 'dark' ? '#fff' : '#0f172a' }}>Pending Requests</Typography>
+                    <List>
+                      {project.joinRequests?.filter(jr => jr.status === 'pending').map((jr) => (
+                        <ListItem key={jr.user._id} sx={{ mb: 2, borderRadius: '12px', bgcolor: theme === 'dark' ? '#0f172a' : '#f8fafc', p: 2, flexDirection: 'column', alignItems: 'flex-start' }}>
+                          <Typography fontWeight={600}>{jr.user.name}</Typography>
+                          <Typography variant="caption" color="text.secondary" sx={{ mb: 2 }}>{jr.user.email}</Typography>
+                          <Box width="100%" display="flex" gap={1}>
+                            <Button fullWidth variant="contained" size="small" onClick={() => onJoinRequestAction(jr.user._id, 'approved')}>Accept</Button>
+                            <Button fullWidth variant="outlined" size="small" color="error" onClick={() => onJoinRequestAction(jr.user._id, 'rejected')}>Reject</Button>
+                          </Box>
+                        </ListItem>
+                      ))}
+                      {project.joinRequests?.filter(jr => jr.status === 'pending').length === 0 && (
+                        <Typography variant="body2" color="text.secondary" textAlign="center" sx={{ py: 2 }}>No pending requests</Typography>
+                      )}
+                    </List>
+                    <Divider sx={{ my: 2, borderColor: theme === 'dark' ? '#334155' : '#f1f5f9' }} />
+                    <Button fullWidth variant="outlined" startIcon={<ShareIcon />} onClick={() => setJoinCodeModalOpen(true)}>
+                      Show Join Code
+                    </Button>
+                  </Paper>
+               </Grid>
+             )}
+           </Grid>
+        </TabPanel>
+      </Box>
 
       {/* Speed Dial for quick actions */}
       <SpeedDial
@@ -1356,18 +1220,23 @@ function AdminProjectView({
           },
         }}
       >
-        {speedDialActions.map((action) => (
-          <SpeedDialAction
-            key={action.name}
-            icon={action.icon}
-            tooltipTitle={action.name}
-            onClick={action.action}
-            sx={{
-              bgcolor: theme === "dark" ? "#333" : "#fff",
-              "&:hover": { bgcolor: theme === "dark" ? "#444" : "#f5f5f5" },
-            }}
-          />
-        ))}
+        {speedDialActions
+          .filter(action => {
+            if (action.name === "Team Chat") return true;
+            return canManageProject;
+          })
+          .map((action) => (
+            <SpeedDialAction
+              key={action.name}
+              icon={action.icon}
+              tooltipTitle={action.name}
+              onClick={action.action}
+              sx={{
+                bgcolor: theme === "dark" ? "#333" : "#fff",
+                "&:hover": { bgcolor: theme === "dark" ? "#444" : "#f5f5f5" },
+              }}
+            />
+          ))}
       </SpeedDial>
 
       {/* Modals */}
@@ -1655,210 +1524,9 @@ function AdminProjectView({
   );
 }
 
-// Professional Member View Component
-function MemberProjectView({ project, setChatDrawerOpen }) {
-  const { theme } = useTheme();
-
-  const handleDocumentDownload = async (doc) => {
-    const token = localStorage.getItem("token");
-    try {
-      const res = await fetch(
-        `http://localhost:5000/api/projects/${project._id}/documents/${doc._id}/download`,
-        {
-          method: "GET",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.message || "Failed to download document.");
-      }
-      const blob = await res.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = doc.originalname;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-    } catch (err) {
-      console.error("Error downloading document:", err);
-      alert(`Failed to download document: ${err.message}`);
-    }
-  };
-
-  const handleDocumentPreview = async (doc) => {
-    const token = localStorage.getItem("token");
-    try {
-      const res = await fetch(
-        `http://localhost:5000/api/projects/${project._id}/documents/${doc._id}/preview`,
-        {
-          method: "GET",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.message || "Failed to preview document.");
-      }
-      const blob = await res.blob();
-      const url = window.URL.createObjectURL(blob);
-      const newWindow = window.open(url, "_blank");
-      if (newWindow) {
-        newWindow.focus();
-      }
-    } catch (err) {
-      console.error("Error previewing document:", err);
-      alert(`Failed to preview document: ${err.message}`);
-    }
-  };
-
-  return (
-    <Box sx={{ width: "100vw", py: 4, px: { xs: 2, md: 4 } }}>
-      {/* Project Header */}
-      <Paper
-        sx={{
-          p: 4,
-          mb: 4,
-          bgcolor: theme === "dark" ? "#2d2d2d" : "#fff",
-          borderRadius: 2,
-          boxShadow:
-            theme === "dark"
-              ? "0 4px 20px rgba(0,0,0,0.3)"
-              : "0 4px 20px rgba(0,0,0,0.1)",
-          border: `1px solid ${theme === "dark" ? "#444" : "#e0e0e0"}`,
-        }}
-      >
-        <Box
-          display="flex"
-          justifyContent="space-between"
-          alignItems="flex-start"
-          mb={3}
-        >
-          <Box sx={{ flex: 1, mr: 3 }}>
-            <Typography
-              variant="h3"
-              fontWeight={700}
-              color="primary"
-              mb={1}
-              sx={{ color: theme === "dark" ? "#fff" : "#1976d2" }}
-            >
-              {project.name}
-            </Typography>
-            <Typography
-              variant="h6"
-              color="text.secondary"
-              mb={2}
-              sx={{ color: theme === "dark" ? "#ccc" : "#666" }}
-            >
-              {project.description || "No description available"}
-            </Typography>
-            <Box display="flex" gap={1} flexWrap="wrap">
-              <Chip
-                label={project.status || "active"}
-                color={project.status === "completed" ? "success" : "primary"}
-                size="small"
-              />
-              <Chip
-                label={`Created by ${project.createdBy?.name || "Unknown"}`}
-                color="secondary"
-                size="small"
-              />
-              <Chip
-                label={`${project.members?.length || 0} members`}
-                color="info"
-                size="small"
-              />
-            </Box>
-          </Box>
-          <Box
-            display="flex"
-            gap={3}
-            sx={{ flexShrink: 0, alignItems: "flex-start" }}
-          >
-            <Tooltip title="Project Chat" placement="top">
-              <IconButton
-                onClick={() => setChatDrawerOpen(true)}
-                sx={{
-                  bgcolor: theme === "dark" ? "#1976d2" : "#1976d2",
-                  color: "white",
-                  width: 48,
-                  height: 48,
-                  "&:hover": {
-                    bgcolor: theme === "dark" ? "#1565c0" : "#1565c0",
-                    transform: "scale(1.05)",
-                  },
-                  transition: "all 0.2s ease",
-                  boxShadow:
-                    theme === "dark"
-                      ? "0 4px 12px rgba(25, 118, 210, 0.3)"
-                      : "0 4px 12px rgba(25, 118, 210, 0.2)",
-                }}
-              >
-                <ChatIcon />
-              </IconButton>
-            </Tooltip>
-          </Box>
-        </Box>
-      </Paper>
-      {/* Project Info Section (read-only) */}
-      <Grid container spacing={3} mb={4}>
-        <Grid item xs={12} md={6}>
-          <Card sx={{ p: 3, borderRadius: 2, boxShadow: 1 }}>
-            <Typography variant="h5" fontWeight={600} mb={2}>
-              <VisibilityIcon color="primary" sx={{ mr: 1 }} />
-              Project Information
-            </Typography>
-            <Typography variant="body2" color="text.secondary" mb={1}>
-              Start Date:{" "}
-              {project.startDate
-                ? new Date(project.startDate).toLocaleDateString()
-                : "Not set"}
-            </Typography>
-            <Typography variant="body2" color="text.secondary" mb={1}>
-              End Date:{" "}
-              {project.endDate
-                ? new Date(project.endDate).toLocaleDateString()
-                : "Not set"}
-            </Typography>
-            <Typography variant="body2" color="text.secondary" mb={1}>
-              Created: {new Date(project.createdAt).toLocaleDateString()}
-            </Typography>
-          </Card>
-        </Grid>
-        <Grid item xs={12} md={6}>
-          <Card sx={{ p: 3, borderRadius: 2, boxShadow: 1 }}>
-            <Typography variant="h5" fontWeight={600} mb={2}>
-              <GroupIcon color="primary" sx={{ mr: 1 }} />
-              Project Members
-            </Typography>
-            <Box display="flex" gap={1} flexWrap="wrap">
-              {project.members?.map((member) => (
-                <Chip
-                  key={member._id}
-                  label={member.name}
-                  avatar={<Avatar>{member.name[0]}</Avatar>}
-                />
-              ))}
-            </Box>
-          </Card>
-        </Grid>
-      </Grid>
-      {/* Editable Section: Only allowed fields (e.g., progress/comments) */}
-      {/* Add your allowed editable fields/components here, e.g., TaskManagement, comments, etc. */}
-      {/* ... existing code for tasks, meetings, chat, etc. ... */}
-    </Box>
-  );
-}
-
 export default function ProjectPage() {
   const { user, role } = useAuth();
-  const { theme } = useTheme();
+  const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const { id } = useParams();
   const [project, setProject] = useState(null);
@@ -1879,7 +1547,7 @@ export default function ProjectPage() {
     const token = localStorage.getItem("token");
     setLoading(true);
     setError("");
-    fetch(`http://localhost:5000/api/projects/${id}`, {
+    fetch(`${API_BASE}/projects/${id}`, {
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${token}`,
@@ -1902,38 +1570,38 @@ export default function ProjectPage() {
 
     const formData = new FormData();
     for (let i = 0; i < files.length; i++) {
-      formData.append("file", files[i]);
+        formData.append("file", files[i]);
     }
     setUploading(true);
     try {
-      const token = localStorage.getItem("token");
-      const res = await fetch(
-        `http://localhost:5000/api/projects/${id}/documents`,
-        {
-          method: "POST",
-          headers: { Authorization: `Bearer ${token}` },
-          body: formData,
+        const token = localStorage.getItem("token");
+        const res = await fetch(
+            `${API_BASE}/projects/${id}/documents`,
+            {
+                method: "POST",
+                headers: { Authorization: `Bearer ${token}` },
+                body: formData,
+            }
+        );
+        const data = await res.json();
+        if (!res.ok) {
+            setUploadError(data.message || "Failed to upload document(s).");
+        } else {
+            setUploadSuccess("Documents uploaded successfully.");
+            fetchProject();
         }
-      );
-      const data = await res.json();
-      if (!res.ok) {
-        setUploadError(data.message || "Failed to upload document(s).");
-      } else {
-        setUploadSuccess("Documents uploaded successfully.");
-        fetchProject();
-      }
     } catch (err) {
-      setUploadError("Failed to upload document(s). Please try again.");
+        setUploadError("Failed to upload document(s). Please try again.");
     } finally {
-      setUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = "";
+        setUploading(false);
+        if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
 
   const handleJoinRequestAction = async (userId, status) => {
     const token = localStorage.getItem("token");
     await fetch(
-      `http://localhost:5000/api/projects/join-request/${project._id}/${userId}`,
+      `${API_BASE}/projects/join-request/${project._id}/${userId}`,
       {
         method: "PATCH",
         headers: {
@@ -1947,11 +1615,10 @@ export default function ProjectPage() {
   };
 
   // Check if current user is admin of this project
-  const isProjectAdmin =
-    project &&
-    project.createdBy &&
-    (project.createdBy._id === user?.id || project.createdBy._id === user?._id);
-  const canManageProject = role === "admin" && isProjectAdmin;
+  const currentUserId = user?.id || user?._id;
+  const isCreator = project?.createdBy && (project.createdBy._id === currentUserId || project.createdBy === currentUserId);
+  const isProjectAdmin = project?.members?.find(m => m._id === currentUserId)?.role === 'admin';
+  const canManageProject = role === "admin" || isCreator || isProjectAdmin;
 
   if (loading)
     return (
@@ -1963,7 +1630,7 @@ export default function ProjectPage() {
           minHeight: "100vh",
           flexDirection: "column",
           gap: 2,
-          bgcolor: theme === "dark" ? "#1a1a1a" : "#f5f5f5",
+          bgcolor: theme === "dark" ? "#0f172a" : "#f8fafc",
         }}
       >
         <CircularProgress size={60} thickness={4} />
@@ -1982,7 +1649,7 @@ export default function ProjectPage() {
           minHeight: "100vh",
           flexDirection: "column",
           gap: 2,
-          bgcolor: theme === "dark" ? "#1a1a1a" : "#f5f5f5",
+          bgcolor: theme === "dark" ? "#0f172a" : "#f8fafc",
         }}
       >
         <Typography color="error.main" variant="h6">
@@ -1996,61 +1663,44 @@ export default function ProjectPage() {
   if (!project) return null;
 
   return (
-    <Box
-      sx={{
-        width: "100vw",
-        minHeight: "100vh",
-        bgcolor: theme === "dark" ? "#1a1a1a" : "#f5f5f5",
-        position: "relative",
-        overflowX: "hidden",
-      }}
-    >
+    <Box sx={{ flexGrow: 1, position: "relative" }}>
       {/* Professional back button */}
       <Box
-        sx={{ position: "relative", zIndex: 1, pt: 4, px: { xs: 2, md: 4 } }}
+        sx={{ position: "absolute", zIndex: 10, top: 16, left: { xs: 16, md: 32 } }}
       >
         <Button
-          variant="outlined"
-          onClick={() => navigate(-1)}
+          variant="text"
+          onClick={() => navigate("/dashboard")}
           startIcon={<ArrowBackIcon />}
           sx={{
-            mb: 3,
-            borderRadius: 2,
-            borderColor: theme === "dark" ? "#444" : "#ccc",
-            color: theme === "dark" ? "#fff" : "#333",
+            color: theme === "dark" ? "#94a3b8" : "#64748b",
             "&:hover": {
-              borderColor: theme === "dark" ? "#666" : "#999",
-              bgcolor:
-                theme === "dark"
-                  ? "rgba(255,255,255,0.05)"
-                  : "rgba(0,0,0,0.05)",
+              color: theme === "dark" ? "#fff" : "#0f172a",
+              bgcolor: 'transparent'
             },
+            fontWeight: 600,
+            textTransform: 'none'
           }}
         >
-          Back to Projects
+          Back to Dashboard
         </Button>
       </Box>
 
-      {/* Render appropriate view based on user role */}
-      {canManageProject ? (
-        <AdminProjectView
-          project={project}
-          onProjectUpdate={fetchProject}
-          onDocumentUpload={handleDocumentUpload}
-          fileInputRef={fileInputRef}
-          uploading={uploading}
-          uploadError={uploadError}
-          uploadSuccess={uploadSuccess}
-          onJoinRequestAction={handleJoinRequestAction}
-          canManageProject={canManageProject}
-          setChatDrawerOpen={setChatDrawerOpen}
-        />
-      ) : (
-        <MemberProjectView
-          project={project}
-          setChatDrawerOpen={setChatDrawerOpen}
-        />
-      )}
+      {/* Render Project View */}
+      <ProjectView
+         project={project}
+         onProjectUpdate={fetchProject}
+         onDocumentUpload={handleDocumentUpload}
+         fileInputRef={fileInputRef}
+         uploading={uploading}
+         uploadError={uploadError}
+         uploadSuccess={uploadSuccess}
+         onJoinRequestAction={handleJoinRequestAction}
+         canManageProject={canManageProject}
+         setChatDrawerOpen={setChatDrawerOpen}
+         fetchProject={fetchProject}
+         toggleTheme={toggleTheme}
+      />
 
       {/* Professional Chat Drawer */}
       <ProjectChatDrawer

@@ -42,6 +42,7 @@ import {
   Switch,
   Autocomplete,
   ListItemIcon,
+  Slide,
 } from "@mui/material";
 import {
   Add as AddIcon,
@@ -131,7 +132,7 @@ const MeetingManagement = ({ projectId, onMeetingUpdate }) => {
     try {
       const token = localStorage.getItem("token");
       const response = await fetch(
-        `http://localhost:5000/api/meetings/project/${projectId}`,
+        `${import.meta.env.VITE_API_URL}/meetings/project/${projectId}`,
         {
           headers: { Authorization: `Bearer ${token}` },
         }
@@ -153,7 +154,7 @@ const MeetingManagement = ({ projectId, onMeetingUpdate }) => {
     try {
       const token = localStorage.getItem("token");
       const response = await fetch(
-        `http://localhost:5000/api/projects/${projectId}`,
+        `${import.meta.env.VITE_API_URL}/projects/${projectId}`,
         {
           headers: { Authorization: `Bearer ${token}` },
         }
@@ -171,7 +172,7 @@ const MeetingManagement = ({ projectId, onMeetingUpdate }) => {
     try {
       const token = localStorage.getItem("token");
       const response = await fetch(
-        `http://localhost:5000/api/meetings/analytics/project/${projectId}`,
+        `${import.meta.env.VITE_API_URL}/meetings/analytics/project/${projectId}`,
         {
           headers: { Authorization: `Bearer ${token}` },
         }
@@ -188,7 +189,7 @@ const MeetingManagement = ({ projectId, onMeetingUpdate }) => {
   const handleCreateMeeting = async () => {
     try {
       const token = localStorage.getItem("token");
-      const response = await fetch("http://localhost:5000/api/meetings", {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/meetings`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -231,7 +232,7 @@ const MeetingManagement = ({ projectId, onMeetingUpdate }) => {
     try {
       const token = localStorage.getItem("token");
       const response = await fetch(
-        `http://localhost:5000/api/meetings/${editingMeeting._id}`,
+        `${import.meta.env.VITE_API_URL}/meetings/${editingMeeting._id}`,
         {
           method: "PUT",
           headers: {
@@ -276,7 +277,7 @@ const MeetingManagement = ({ projectId, onMeetingUpdate }) => {
     try {
       const token = localStorage.getItem("token");
       const response = await fetch(
-        `http://localhost:5000/api/meetings/${meetingId}`,
+        `${import.meta.env.VITE_API_URL}/meetings/${meetingId}`,
         {
           method: "DELETE",
           headers: { Authorization: `Bearer ${token}` },
@@ -307,7 +308,7 @@ const MeetingManagement = ({ projectId, onMeetingUpdate }) => {
     try {
       const token = localStorage.getItem("token");
       const response = await fetch(
-        `http://localhost:5000/api/meetings/${meetingId}/respond`,
+        `${import.meta.env.VITE_API_URL}/meetings/${meetingId}/respond`,
         {
           method: "POST",
           headers: {
@@ -341,7 +342,7 @@ const MeetingManagement = ({ projectId, onMeetingUpdate }) => {
     try {
       const token = localStorage.getItem("token");
       const response = await fetch(
-        `http://localhost:5000/api/meetings/${meetingId}/minutes`,
+        `${import.meta.env.VITE_API_URL}/meetings/${meetingId}/minutes`,
         {
           method: "POST",
           headers: {
@@ -606,6 +607,16 @@ const MeetingManagement = ({ projectId, onMeetingUpdate }) => {
         </Tabs>
       </Paper>
 
+      <Box sx={{ mt: 2, mb: 2, display: "flex", justifyContent: "flex-end" }}>
+        <Button
+          variant="contained"
+          startIcon={<AddIcon />}
+          onClick={() => openMeetingDialog()}
+        >
+          Schedule New Meeting
+        </Button>
+      </Box>
+
       {/* Meeting List */}
       <List sx={{ mt: 2 }}>
         {filteredMeetings().map((meeting) => (
@@ -714,13 +725,17 @@ const MeetingManagement = ({ projectId, onMeetingUpdate }) => {
                     </IconButton>
                   </Tooltip>
                   {meeting.videoCallLink && (
-                    <Tooltip title="Open Video Panel">
-                      <IconButton
-                        onClick={() => setSelectedMeeting(meeting)}
+                    <Tooltip title="Join Video Room">
+                      <Button
+                        variant="contained"
+                        size="small"
                         color="primary"
+                        startIcon={<VideoCallIcon />}
+                        onClick={() => setSelectedMeeting(meeting)}
+                        sx={{ ml: 1 }}
                       >
-                        <VideoCallIcon />
-                      </IconButton>
+                        Join
+                      </Button>
                     </Tooltip>
                   )}
                 </Box>
@@ -959,6 +974,29 @@ const MeetingManagement = ({ projectId, onMeetingUpdate }) => {
         </DialogActions>
       </Dialog>
 
+      {/* Video Call Dialog */}
+      <Dialog
+        fullScreen
+        open={Boolean(selectedMeeting && selectedMeeting.videoCallLink)}
+        onClose={() => setSelectedMeeting(null)}
+        TransitionComponent={Slide}
+        TransitionProps={{ direction: "up" }}
+      >
+        <Box sx={{ bgcolor: "background.default", height: "100vh", display: "flex", flexDirection: "column" }}>
+          <Box sx={{ p: 2, display: "flex", alignItems: "center", justifyContent: "space-between", bgcolor: "primary.main", color: "primary.contrastText" }}>
+             <Typography variant="h6">
+                {selectedMeeting?.title} - Video Room
+             </Typography>
+             <Button color="inherit" onClick={() => setSelectedMeeting(null)} startIcon={<CloseIcon />}>
+                Close Room
+             </Button>
+          </Box>
+          <Box sx={{ flex: 1, bgcolor: "#000" }}>
+             <VideoPanel link={selectedMeeting?.videoCallLink} />
+          </Box>
+        </Box>
+      </Dialog>
+
       {/* Snackbar */}
       <Snackbar
         open={snackbar.open}
@@ -966,8 +1004,9 @@ const MeetingManagement = ({ projectId, onMeetingUpdate }) => {
         onClose={() => setSnackbar({ ...snackbar, open: false })}
       >
         <Alert
-          severity={snackbar.severity}
           onClose={() => setSnackbar({ ...snackbar, open: false })}
+          severity={snackbar.severity}
+          sx={{ width: "100%" }}
         >
           {snackbar.message}
         </Alert>

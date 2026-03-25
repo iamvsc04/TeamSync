@@ -3,15 +3,10 @@ const Project = require("../models/Project");
 const User = require("../models/User");
 const jwt = require("jsonwebtoken");
 const ChatMessage = require("../models/ChatMessage");
-const multer = require("multer");
-const path = require("path");
+const { upload, deleteFromCloudinary } = require('../utils/cloudinary');
 
 const router = express.Router();
 
-const upload = multer({
-  dest: path.join(__dirname, "../uploads"),
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
-});
 
 // Middleware to check JWT and set req.user
 function authMiddleware(req, res, next) {
@@ -112,6 +107,50 @@ router.put("/:id", authMiddleware, async (req, res) => {
   }
 });
 
+// Dashboard Statistics
+router.get("/stats/dashboard", authMiddleware, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const role = req.user.role;
+
+    let projectQuery = {};
+    if (role !== 'admin') {
+      projectQuery = { members: userId };
+    }
+
+    const projects = await Project.find(projectQuery);
+    
+    const active = projects.filter(p => p.status !== 'completed' && p.status !== 'archived').length;
+    const completed = projects.filter(p => p.status === 'completed').length;
+
+    // Weekly completion trend (last 7 days)
+    const weeklyCompletion = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const dayName = d.toLocaleDateString('en-US', { weekday: 'short' });
+      weeklyCompletion.push({ name: dayName, completion: 0 });
+    }
+
+    projects.forEach(p => {
+      if (p.status === 'completed' && p.updatedAt) {
+        const completedDay = new Date(p.updatedAt).toLocaleDateString('en-US', { weekday: 'short' });
+        const dayObj = weeklyCompletion.find(d => d.name === completedDay);
+        if (dayObj) dayObj.completion++;
+      }
+    });
+
+    res.json({
+      active,
+      completed,
+      weeklyCompletion
+    });
+  } catch (err) {
+    console.error("Error in GET /stats/dashboard:", err);
+    res.status(500).json({ message: "Server error.", error: err.message });
+  }
+});
+
 // Get all ongoing (active) projects
 router.get("/ongoing", authMiddleware, async (req, res) => {
   try {
@@ -145,22 +184,24 @@ router.get("/my-join-requests", authMiddleware, async (req, res) => {
 
     const requests = [];
     projects.forEach((project) => {
-      project.joinRequests.forEach((reqst) => {
-        if (reqst.user.toString() === req.user.userId) {
-          requests.push({
-            projectId: project._id,
-            projectName: project.name,
-            status: reqst.status,
-            requestedAt: reqst.requestedAt,
-          });
-        }
-      });
+      if (project.joinRequests && Array.isArray(project.joinRequests)) {
+        project.joinRequests.forEach((reqst) => {
+          if (reqst && reqst.user && reqst.user.toString() === req.user.userId) {
+            requests.push({
+              projectId: project._id,
+              projectName: project.name,
+              status: reqst.status,
+              requestedAt: reqst.requestedAt,
+            });
+          }
+        });
+      }
     });
 
     res.json(requests);
   } catch (err) {
-    console.error("Error in my-join-requests route:", err);
-    res.status(500).json({ message: "Server error." });
+    console.error("Error in GET /my-join-requests:", err);
+    res.status(500).json({ message: "Server error.", error: err.message });
   }
 });
 
@@ -181,6 +222,46 @@ router.get("/member-projects", authMiddleware, async (req, res) => {
   }
 });
 
+// Admin: Get all join requests for projects they own
+router.get("/join-requests", authMiddleware, async (req, res) => {
+  if (req.user.role !== "admin") {
+    return res.status(403).json({ message: "Admins only" });
+  }
+
+  try {
+    const projects = await Project.find({ createdBy: req.user.userId })
+      .populate("joinRequests.user", "name email")
+      .select("name joinRequests");
+
+    if (!projects) {
+      return res.json([]);
+    }
+
+    // Flatten join requests with project info
+    const requests = [];
+    projects.forEach((project) => {
+      if (project.joinRequests && Array.isArray(project.joinRequests)) {
+        project.joinRequests.forEach((reqst) => {
+          if (reqst && reqst.status === "pending") {
+            requests.push({
+              projectId: project._id,
+              projectName: project.name,
+              user: reqst.user,
+              status: reqst.status,
+              requestedAt: reqst.requestedAt,
+            });
+          }
+        });
+      }
+    });
+
+    res.json(requests);
+  } catch (err) {
+    console.error("Error in GET /join-requests:", err);
+    res.status(500).json({ message: "Server error.", error: err.message });
+  }
+});
+
 // Get project details by ID
 router.get("/:id", authMiddleware, async (req, res) => {
   try {
@@ -190,7 +271,8 @@ router.get("/:id", authMiddleware, async (req, res) => {
     if (!project) return res.status(404).json({ message: "Project not found" });
     res.json(project);
   } catch (err) {
-    res.status(500).json({ message: "Server error." });
+    console.error(`Error in GET /projects/${req.params.id}:`, err);
+    res.status(500).json({ message: "Server error.", error: err.message });
   }
 });
 
@@ -355,38 +437,6 @@ router.post("/join-request", authMiddleware, async (req, res) => {
   }
 });
 
-// Admin: Get all join requests for projects they own
-router.get("/join-requests", authMiddleware, async (req, res) => {
-  if (req.user.role !== "admin") {
-    return res.status(403).json({ message: "Admins only" });
-  }
-
-  try {
-    const projects = await Project.find({ createdBy: req.user.userId })
-      .populate("joinRequests.user", "name email")
-      .select("name joinRequests");
-
-    // Flatten join requests with project info
-    const requests = [];
-    projects.forEach((project) => {
-      project.joinRequests.forEach((reqst) => {
-        if (reqst.status === "pending") {
-          requests.push({
-            projectId: project._id,
-            projectName: project.name,
-            user: reqst.user,
-            status: reqst.status,
-            requestedAt: reqst.requestedAt,
-          });
-        }
-      });
-    });
-
-    res.json(requests);
-  } catch (err) {
-    res.status(500).json({ message: "Server error." });
-  }
-});
 
 // Admin: Approve or reject a join request
 router.patch(
@@ -482,24 +532,24 @@ router.get("/:id/chat", authMiddleware, async (req, res) => {
 
     // Check if user is a member of the project
     const isMember = project.members.some(
-      (member) =>
-        member._id.toString() === req.user.userId ||
-        member.toString() === req.user.userId
+      (member) => (member._id || member).toString() === req.user.userId
     );
+    const isCreator = String(project.createdBy) === req.user.userId;
+    const isGlobalAdmin = req.user.role === "admin";
 
-    if (!isMember) {
+    if (!isMember && !isCreator && !isGlobalAdmin) {
       return res.status(403).json({ message: "Access denied" });
     }
 
     const total = await ChatMessage.countDocuments({ projectId });
     const messages = await ChatMessage.find({ projectId })
       .populate("senderId", "name email role")
-      .sort({ timestamp: 1 })
+      .sort({ timestamp: -1 })
       .skip(skip)
       .limit(limit);
 
     res.json({
-      messages,
+      messages: messages.reverse(),
       pagination: {
         currentPage: page,
         totalPages: Math.max(1, Math.ceil(total / limit)),
@@ -530,12 +580,12 @@ router.post("/:id/chat", authMiddleware, async (req, res) => {
 
     // Check if user is a member of the project
     const isMember = project.members.some(
-      (member) =>
-        member._id.toString() === req.user.userId ||
-        member.toString() === req.user.userId
+      (member) => (member._id || member).toString() === req.user.userId
     );
+    const isCreator = String(project.createdBy) === req.user.userId;
+    const isGlobalAdmin = req.user.role === "admin";
 
-    if (!isMember) {
+    if (!isMember && !isCreator && !isGlobalAdmin) {
       return res.status(403).json({ message: "Access denied" });
     }
 
@@ -559,23 +609,24 @@ router.post("/:id/chat", authMiddleware, async (req, res) => {
   }
 });
 
-// Upload a document to a project (admin only)
+// Upload documents to a project (members and admins)
 router.post(
   "/:id/documents",
   authMiddleware,
-  upload.array("file", 10), // Allow up to 10 files
+  upload.array("file", 10),
   async (req, res) => {
-    if (req.user.role !== "admin") {
-      return res
-        .status(403)
-        .json({ message: "Only admin can upload documents" });
-    }
     try {
       const project = await Project.findById(req.params.id);
       if (!project)
         return res.status(404).json({ message: "Project not found" });
-      if (project.createdBy.toString() !== req.user.userId) {
-        return res.status(403).json({ message: "Not your project." });
+
+      // Check if user is a member or admin
+      const isMember = project.members.some(m => String(m) === req.user.userId);
+      const isCreator = String(project.createdBy) === req.user.userId;
+      const isGlobalAdmin = req.user.role === "admin";
+
+      if (!isMember && !isCreator && !isGlobalAdmin) {
+        return res.status(403).json({ message: "Not authorized to upload to this project." });
       }
       if (!req.files || req.files.length === 0) {
         return res.status(400).json({ message: "No files uploaded." });
@@ -583,25 +634,39 @@ router.post(
 
       const uploadedDocs = [];
       for (const file of req.files) {
+        // Cloudinary multer provides:
+        //   file.path     = CDN URL (e.g. https://res.cloudinary.com/...)
+        //   file.filename = public_id  (used for deletion)
         const docMeta = {
-          filename: file.filename,
+          filename:     file.filename,      // Cloudinary public_id
           originalname: file.originalname,
-          uploader: req.user.userId,
+          url:          file.path,          // Direct CDN URL
+          uploader:     req.user.userId,
+          size:         file.size || 0,
+          mimetype:     file.mimetype,
         };
         project.documents.push(docMeta);
         uploadedDocs.push(docMeta);
       }
 
       await project.save();
+
+      // Populate uploader info for immediate use in the frontend
+      const populated = await Project.findById(project._id)
+        .populate("documents.uploader", "name email");
+      const newDocs = populated.documents.slice(-uploadedDocs.length);
+
       res.status(201).json({
         message: `${uploadedDocs.length} document(s) uploaded.`,
-        documents: uploadedDocs,
+        documents: newDocs,
       });
     } catch (err) {
+      console.error("Document upload error:", err);
       res.status(500).json({ message: "Server error." });
     }
   }
 );
+
 
 // List all documents for a project
 router.get("/:id/documents", authMiddleware, async (req, res) => {
@@ -626,7 +691,7 @@ router.get("/:id/documents", authMiddleware, async (req, res) => {
   }
 });
 
-// Download a document
+// Download a document — redirect to Cloudinary CDN URL
 router.get(
   "/:id/documents/:docId/download",
   authMiddleware,
@@ -635,26 +700,31 @@ router.get(
       const project = await Project.findById(req.params.id);
       if (!project)
         return res.status(404).json({ message: "Project not found" });
-      // Only members or admins can download documents
       if (
         req.user.role !== "admin" &&
         !project.members.map((m) => String(m)).includes(req.user.userId)
       ) {
-        return res
-          .status(403)
-          .json({ message: "Not authorized to download documents" });
+        return res.status(403).json({ message: "Not authorized to download documents" });
       }
       const doc = project.documents.id(req.params.docId);
       if (!doc) return res.status(404).json({ message: "Document not found" });
-      const filePath = path.join(__dirname, "../uploads", doc.filename);
-      res.download(filePath, doc.originalname);
+
+      if (!doc.url) {
+        return res.status(404).json({ message: "File URL not available" });
+      }
+
+      // For Cloudinary files, we redirect to the CDN URL.
+      // The `fl_attachment` flag forces the browser to download instead of preview.
+      const downloadUrl = doc.url.replace("/upload/", "/upload/fl_attachment/");
+      res.redirect(downloadUrl);
     } catch (err) {
       res.status(500).json({ message: "Server error." });
     }
   }
 );
 
-// Preview a document
+
+// Preview a document — redirect to Cloudinary CDN URL (inline)
 router.get(
   "/:id/documents/:docId/preview",
   authMiddleware,
@@ -663,41 +733,29 @@ router.get(
       const project = await Project.findById(req.params.id);
       if (!project)
         return res.status(404).json({ message: "Project not found" });
-      // Only members or admins can preview documents
       if (
         req.user.role !== "admin" &&
         !project.members.map((m) => String(m)).includes(req.user.userId)
       ) {
-        return res
-          .status(403)
-          .json({ message: "Not authorized to preview documents" });
+        return res.status(403).json({ message: "Not authorized to preview documents" });
       }
       const doc = project.documents.id(req.params.docId);
       if (!doc) return res.status(404).json({ message: "Document not found" });
-      const filePath = path.join(__dirname, "../uploads", doc.filename);
 
-      // Set appropriate headers for preview
-      res.setHeader("Content-Type", getContentType(doc.originalname));
-      res.setHeader(
-        "Content-Disposition",
-        'inline; filename="' + doc.originalname + '"'
-      );
-
-      // Stream the file
-      const fs = require("fs");
-      if (fs.existsSync(filePath)) {
-        const fileStream = fs.createReadStream(filePath);
-        fileStream.pipe(res);
-      } else {
-        res.status(404).json({ message: "File not found on server" });
+      if (!doc.url) {
+        return res.status(404).json({ message: "File URL not available" });
       }
+
+      // Redirect directly to the Cloudinary CDN URL — browser handles inline display
+      res.redirect(doc.url);
     } catch (err) {
       res.status(500).json({ message: "Server error." });
     }
   }
 );
 
-// Remove a document
+
+// Remove a document — deletes from Cloudinary and from DB
 router.delete("/:id/documents/:docId", authMiddleware, async (req, res) => {
   try {
     const project = await Project.findById(req.params.id);
@@ -705,9 +763,7 @@ router.delete("/:id/documents/:docId", authMiddleware, async (req, res) => {
 
     // Only admins can remove documents
     if (req.user.role !== "admin") {
-      return res
-        .status(403)
-        .json({ message: "Only admins can remove documents" });
+      return res.status(403).json({ message: "Only admins can remove documents" });
     }
 
     // Check if user is the project creator
@@ -720,14 +776,15 @@ router.delete("/:id/documents/:docId", authMiddleware, async (req, res) => {
     const doc = project.documents.id(req.params.docId);
     if (!doc) return res.status(404).json({ message: "Document not found" });
 
-    // Remove file from filesystem
-    const filePath = path.join(__dirname, "../uploads", doc.filename);
-    const fs = require("fs");
-    if (fs.existsSync(filePath)) {
-      fs.unlinkSync(filePath);
+    // Delete from Cloudinary using the stored public_id (filename field)
+    if (doc.filename) {
+      // Determine resource type: images vs raw (PDFs, docs, etc.)
+      const imageExts = /\.(jpg|jpeg|png|gif|webp|svg)$/i;
+      const resourceType = imageExts.test(doc.originalname) ? 'image' : 'raw';
+      await deleteFromCloudinary(doc.filename, resourceType);
     }
 
-    // Remove document from project
+    // Remove document record from DB
     project.documents.pull(req.params.docId);
     await project.save();
 
@@ -737,6 +794,7 @@ router.delete("/:id/documents/:docId", authMiddleware, async (req, res) => {
     res.status(500).json({ message: "Server error." });
   }
 });
+
 
 // Helper function to determine content type
 function getContentType(filename) {

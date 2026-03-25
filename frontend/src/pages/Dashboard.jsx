@@ -1,6 +1,20 @@
+import { API_BASE } from '../config/api';
 import React, { useState, useEffect, useRef } from "react";
 import { useAuth } from "../useAuth";
 import { useNavigate } from "react-router-dom";
+import {
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip as ChartTooltip,
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  Legend,
+  Cell
+} from 'recharts';
 import {
   Dialog,
   DialogTitle,
@@ -9,10 +23,10 @@ import {
   TextField,
   Button,
   Chip,
+  Divider,
   Box,
   Typography,
   Paper,
-  Badge,
   IconButton,
   Avatar,
   Card,
@@ -20,12 +34,11 @@ import {
   Grid,
   Alert,
   CircularProgress,
+  LinearProgress,
 } from "@mui/material";
 import Snackbar from "@mui/material/Snackbar";
 import MuiAlert from "@mui/material/Alert";
 import { useTheme } from "../ThemeContext";
-import NotificationCenter from "../components/NotificationCenter";
-import NotificationsIcon from "@mui/icons-material/Notifications";
 import AssignmentIcon from "@mui/icons-material/Assignment";
 import AddIcon from "@mui/icons-material/Add";
 import VisibilityIcon from "@mui/icons-material/Visibility";
@@ -42,6 +55,8 @@ import PersonIcon from "@mui/icons-material/Person";
 import VideoCallIcon from "@mui/icons-material/VideoCall";
 import AssessmentIcon from "@mui/icons-material/Assessment";
 import MessageIcon from "@mui/icons-material/Message";
+import PlayArrowIcon from "@mui/icons-material/PlayArrow";
+
 
 // Remove unused placeholder fetchers; actual fetchers are defined in TeamSyncDashboard
 
@@ -64,7 +79,7 @@ function JoinProjectModal({ open, onClose, onJoinSuccess }) {
     try {
       const token = localStorage.getItem("token");
       const response = await fetch(
-        "http://localhost:5000/api/projects/join-request",
+        `${API_BASE}/projects/join-request`,
         {
           method: "POST",
           headers: {
@@ -149,6 +164,7 @@ function MemberDashboardContent({
   projects,
   meetings,
   notifications,
+  analytics,
   user,
   onJoinProject,
   fetchProjects,
@@ -156,544 +172,251 @@ function MemberDashboardContent({
   const { theme } = useTheme();
   const navigate = useNavigate();
   const [joinProjectModalOpen, setJoinProjectModalOpen] = useState(false);
-  const [projectsModalOpen, setProjectsModalOpen] = useState(false);
-  const [tasksModalOpen, setTasksModalOpen] = useState(false);
-  const [progressModalOpen, setProgressModalOpen] = useState(false);
-  const [meetingsModalOpen, setMeetingsModalOpen] = useState(false);
 
-  // Calculate metrics
-  const myProjectsCount = projects.length;
-  const completedProjectsCount = projects.filter(
-    (p) => p.status === "completed"
-  ).length;
-
-  const handleJoinProject = () => {
-    setJoinProjectModalOpen(true);
-  };
-
-  const handleJoinSuccess = () => {
-    fetchProjects();
-  };
-
-  const handleViewProjects = () => {
-    // Show projects overview modal
-    setProjectsModalOpen(true);
-  };
-
-  const handleMyTasks = () => {
-    setTasksModalOpen(true);
-  };
-
-  const handleProgress = () => {
-    setProgressModalOpen(true);
-  };
-
-  const handleMeetings = () => {
-    setMeetingsModalOpen(true);
-  };
+  // Metrics
+  const activeProjects = projects.filter(p => p.status !== 'completed').length;
+  const completedProjects = projects.filter(p => p.status === 'completed').length;
 
   return (
-    <Box
-      sx={{
-        maxWidth: 1200,
-        mx: "auto",
-        p: { xs: 2, md: 4 },
-        bgcolor: theme === "dark" ? "#181823" : "#f7f9fb",
-        minHeight: "100vh",
-      }}
-    >
-      {/* Welcome Message */}
-      <Typography
-        variant="h4"
-        fontWeight={700}
-        sx={{
-          mb: 4,
-          color: theme === "dark" ? "#fff" : "#333",
-          textAlign: { xs: "center", md: "left" },
-        }}
-      >
-        Welcome back, {user.name}!
-      </Typography>
+    <Box>
+      <Box mb={6}>
+        <Typography variant="h3" sx={{ fontWeight: 800, mb: 1, color: theme === 'dark' ? '#fff' : '#0f172a' }}>
+          Hello, {user?.name?.split(' ')[0]} 👋
+        </Typography>
+        <Typography variant="h6" color="text.secondary" sx={{ opacity: 0.8 }}>
+          Here's what's happening with your projects today.
+        </Typography>
+      </Box>
 
-      {/* Metrics Overview Section - 3 Cards */}
-      <Grid container spacing={3} sx={{ mb: 4 }}>
-        {/* My Projects Card */}
-        <Grid item xs={12} md={4}>
-          <Paper
-            elevation={3}
-            sx={{
-              p: 4,
-              borderRadius: 3,
-              textAlign: "center",
-              bgcolor: theme === "dark" ? "#232946" : "#fff",
-              border: `1px solid ${theme === "dark" ? "#444" : "#e0e0e0"}`,
-              height: "200px",
-              display: "flex",
-              flexDirection: "column",
-              justifyContent: "space-between",
-            }}
-          >
-            <Box sx={{ textAlign: "left" }}>
-              <FolderIcon sx={{ fontSize: 32, color: "primary.main", mb: 2 }} />
-            </Box>
-            <Box>
-              <Typography
-                variant="h2"
-                fontWeight={700}
-                color="primary"
-                sx={{ mb: 1 }}
-              >
-                {myProjectsCount}
-              </Typography>
-              <Typography variant="h6" fontWeight={600} gutterBottom>
-                My Projects
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                Active projects
-              </Typography>
-            </Box>
-          </Paper>
+      {/* Metric Cards */}
+      <Grid container spacing={3} mb={6}>
+        <Grid xs={12} md={4}>
+          <Card sx={{ 
+            p: 3, 
+            height: '100%',
+            borderRadius: '24px', 
+            bgcolor: theme === 'dark' ? '#1e293b' : '#fff',
+            border: '1px solid',
+            borderColor: theme === 'dark' ? '#334155' : '#e2e8f0',
+            boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)',
+            position: 'relative',
+            overflow: 'hidden'
+          }}>
+             <Box sx={{ position: 'absolute', top: -20, right: -20, opacity: 0.1 }}>
+                <FolderIcon sx={{ fontSize: 120, color: 'primary.main' }} />
+             </Box>
+             <Typography variant="overline" fontWeight={700} color="primary">Active Projects</Typography>
+             <Typography variant="h2" fontWeight={800} sx={{ my: 1 }}>{activeProjects}</Typography>
+             <Typography variant="body2" color="text.secondary">Currently in progress</Typography>
+          </Card>
         </Grid>
-
-        {/* Completed Projects Card */}
-        <Grid item xs={12} md={4}>
-          <Paper
-            elevation={3}
-            sx={{
-              p: 4,
-              borderRadius: 3,
-              textAlign: "center",
-              bgcolor: theme === "dark" ? "#232946" : "#fff",
-              border: `1px solid ${theme === "dark" ? "#444" : "#e0e0e0"}`,
-              height: "200px",
-              display: "flex",
-              flexDirection: "column",
-              justifyContent: "space-between",
-            }}
-          >
-            <Box sx={{ textAlign: "left" }}>
-              <CheckCircleIcon
-                sx={{ fontSize: 32, color: "success.main", mb: 2 }}
-              />
-            </Box>
-            <Box>
-              <Typography
-                variant="h2"
-                fontWeight={700}
-                color="success.main"
-                sx={{ mb: 1 }}
-              >
-                {completedProjectsCount}
-              </Typography>
-              <Typography variant="h6" fontWeight={600} gutterBottom>
-                Completed Projects
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                Successfully delivered
-              </Typography>
-            </Box>
-          </Paper>
+        <Grid xs={12} md={4}>
+          <Card sx={{ 
+            p: 3, 
+            height: '100%',
+            borderRadius: '24px', 
+            bgcolor: theme === 'dark' ? '#1e293b' : '#fff',
+            border: '1px solid',
+            borderColor: theme === 'dark' ? '#334155' : '#e2e8f0',
+            boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)',
+            position: 'relative',
+            overflow: 'hidden'
+          }}>
+             <Box sx={{ position: 'absolute', top: -20, right: -20, opacity: 0.1 }}>
+                <CheckCircleIcon sx={{ fontSize: 120, color: 'success.main' }} />
+             </Box>
+             <Typography variant="overline" fontWeight={700} color="success.main">Completed</Typography>
+             <Typography variant="h2" fontWeight={800} sx={{ my: 1 }}>{completedProjects}</Typography>
+             <Typography variant="body2" color="text.secondary">Successfully delivered</Typography>
+          </Card>
         </Grid>
-
-        {/* Join Meeting Card */}
-        <Grid item xs={12} md={4}>
-          <Paper
-            elevation={3}
-            sx={{
-              p: 4,
-              borderRadius: 3,
-              textAlign: "center",
-              bgcolor: theme === "dark" ? "#232946" : "#fff",
-              border: `1px solid ${theme === "dark" ? "#444" : "#e0e0e0"}`,
-              height: "200px",
-              display: "flex",
-              flexDirection: "column",
-              justifyContent: "space-between",
+        <Grid xs={12} md={4}>
+          <Card 
+            onClick={() => setJoinProjectModalOpen(true)}
+            sx={{ 
+              p: 3, 
+              height: '100%',
+              borderRadius: '24px', 
+              bgcolor: 'primary.main',
+              color: '#fff',
+              border: 'none',
+              boxShadow: '0 10px 15px -3px rgba(99, 102, 241, 0.4)',
+              cursor: 'pointer',
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'center',
+              alignItems: 'center',
+              transition: 'transform 0.2s',
+              '&:hover': { transform: 'scale(1.02)' }
             }}
           >
-            <Box sx={{ textAlign: "left" }}>
-              <VideoCallIcon sx={{ fontSize: 32, color: "info.main", mb: 2 }} />
-            </Box>
-            <Box>
-              <Typography variant="h6" fontWeight={600} gutterBottom>
-                Join Meeting
-              </Typography>
-              <Button
-                variant="contained"
-                color="primary"
-                sx={{
-                  mb: 2,
-                  borderRadius: 2,
-                  textTransform: "none",
-                  fontWeight: 600,
-                }}
-                onClick={handleMeetings}
-              >
-                + Join Meeting
-              </Button>
-              <Typography variant="body2" color="text.secondary">
-                Join team meetings
-              </Typography>
-            </Box>
-          </Paper>
+             <AddIcon sx={{ fontSize: 48, mb: 1 }} />
+             <Typography variant="h5" fontWeight={700}>Join Project</Typography>
+             <Typography variant="body2" sx={{ opacity: 0.8 }}>Use a join code</Typography>
+          </Card>
         </Grid>
       </Grid>
 
-      {/* Member Actions Section */}
-      <Typography
-        variant="h5"
-        fontWeight={700}
-        sx={{
-          mb: 3,
-          color: theme === "dark" ? "#fff" : "#333",
-          display: "flex",
-          alignItems: "center",
-          gap: 1,
-        }}
-      >
-        <DashboardIcon color="primary" />
-        Member Actions
-      </Typography>
-
-      {/* 5 Action Buttons */}
-      <Grid container spacing={2} sx={{ mb: 4 }}>
-        <Grid item xs={12} sm={6} md={2.4}>
-          <Button
-            variant="contained"
-            color="primary"
-            fullWidth
-            sx={{
-              p: 3,
-              borderRadius: 2,
-              fontSize: "1rem",
-              fontWeight: 600,
-              textTransform: "none",
-              height: "80px",
-              display: "flex",
-              flexDirection: "column",
-              gap: 1,
-            }}
-            onClick={handleJoinProject}
-          >
-            <AddIcon sx={{ fontSize: 24 }} />
-            Join Project
-          </Button>
+      {/* Analytics & Activity Row */}
+      <Grid container spacing={3} mb={6}>
+        <Grid xs={12} lg={8} className="dashboard-performance">
+          <Card sx={{ 
+            p: 3, 
+            borderRadius: '24px', 
+            bgcolor: theme === 'dark' ? 'rgba(30, 41, 59, 0.5)' : '#fff',
+            backdropFilter: 'blur(10px)',
+            border: '1px solid',
+            borderColor: theme === 'dark' ? 'rgba(255,255,255,0.05)' : '#e2e8f0',
+            height: '100%'
+          }}>
+            <Box display="flex" justifyContent="space-between" alignItems="center" mb={4}>
+              <Box>
+                <Typography variant="h6" fontWeight={700}>Project Performance</Typography>
+                <Typography variant="body2" color="text.secondary">Weekly completion rate</Typography>
+              </Box>
+              <Button size="small" variant="outlined" sx={{ borderRadius: '8px' }}>This Week</Button>
+            </Box>
+            <Box sx={{ height: 300, width: '100%', minHeight: 300 }}>
+              <ResponsiveContainer width="100%" height={300}>
+                <AreaChart
+                  data={analytics?.weeklyCompletion || []}
+                  margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
+                >
+                  <defs>
+                    <linearGradient id="colorComp" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3}/>
+                      <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <XAxis dataKey="name" stroke={theme === 'dark' ? '#475569' : '#94a3b8'} fontSize={12} />
+                  <YAxis hide />
+                  <ChartTooltip 
+                    contentStyle={{ 
+                      backgroundColor: theme === 'dark' ? '#1e293b' : '#fff',
+                      borderColor: theme === 'dark' ? '#334155' : '#e2e8f0',
+                      borderRadius: '8px'
+                    }} 
+                  />
+                  <Area type="monotone" dataKey="completion" stroke="#6366f1" fillOpacity={1} fill="url(#colorComp)" strokeWidth={3} />
+                </AreaChart>
+              </ResponsiveContainer>
+            </Box>
+          </Card>
         </Grid>
-
-        <Grid item xs={12} sm={6} md={2.4}>
-          <Button
-            variant="contained"
-            color="secondary"
-            fullWidth
-            sx={{
-              p: 3,
-              borderRadius: 2,
-              fontSize: "1rem",
-              fontWeight: 600,
-              textTransform: "none",
-              height: "80px",
-              display: "flex",
-              flexDirection: "column",
-              gap: 1,
-            }}
-            onClick={handleViewProjects}
-          >
-            <FolderIcon sx={{ fontSize: 24 }} />
-            View Projects
-          </Button>
-        </Grid>
-
-        <Grid item xs={12} sm={6} md={2.4}>
-          <Button
-            variant="contained"
-            color="success"
-            fullWidth
-            sx={{
-              p: 3,
-              borderRadius: 2,
-              fontSize: "1rem",
-              fontWeight: 600,
-              textTransform: "none",
-              height: "80px",
-              display: "flex",
-              flexDirection: "column",
-              gap: 1,
-            }}
-            onClick={handleMyTasks}
-          >
-            <GroupIcon sx={{ fontSize: 24 }} />
-            My Tasks
-          </Button>
-        </Grid>
-
-        <Grid item xs={12} sm={6} md={2.4}>
-          <Button
-            variant="contained"
-            color="warning"
-            fullWidth
-            sx={{
-              p: 3,
-              borderRadius: 2,
-              fontSize: "1rem",
-              fontWeight: 600,
-              textTransform: "none",
-              height: "80px",
-              display: "flex",
-              flexDirection: "column",
-              gap: 1,
-            }}
-            onClick={handleProgress}
-          >
-            <AssessmentIcon sx={{ fontSize: 24 }} />
-            Progress
-          </Button>
-        </Grid>
-
-        <Grid item xs={12} sm={6} md={2.4}>
-          <Button
-            variant="contained"
-            color="info"
-            fullWidth
-            sx={{
-              p: 3,
-              borderRadius: 2,
-              fontSize: "1rem",
-              fontWeight: 600,
-              textTransform: "none",
-              height: "80px",
-              display: "flex",
-              flexDirection: "column",
-              gap: 1,
-            }}
-            onClick={handleMeetings}
-          >
-            <VideoCallIcon sx={{ fontSize: 24 }} />
-            Meetings
-          </Button>
-        </Grid>
-      </Grid>
-
-      {/* Recent Projects Section */}
-      <Typography
-        variant="h5"
-        fontWeight={700}
-        sx={{
-          mb: 3,
-          color: theme === "dark" ? "#fff" : "#333",
-        }}
-      >
-        Recent Projects
-      </Typography>
-
-      <Grid container spacing={3}>
-        {projects.length === 0 ? (
-          <Grid item xs={12}>
-            <Paper
-              sx={{
-                p: 4,
-                textAlign: "center",
-                color: "text.secondary",
-                borderRadius: 3,
-                bgcolor: theme === "dark" ? "#232946" : "#fff",
-              }}
-            >
-              <Typography variant="h6" gutterBottom>
-                No projects yet
-              </Typography>
-              <Typography variant="body2" sx={{ mb: 2 }}>
-                You haven't joined any projects yet. Click "Join Project" to get
-                started!
-              </Typography>
-              <Button
-                variant="contained"
-                color="primary"
-                onClick={handleJoinProject}
-              >
-                Join Your First Project
-              </Button>
-            </Paper>
-          </Grid>
-        ) : (
-          projects.slice(0, 3).map((project) => (
-            <Grid item xs={12} sm={6} md={4} key={project._id}>
-              <Card
-                sx={{
-                  borderRadius: 3,
-                  boxShadow: 3,
-                  cursor: "pointer",
-                  transition: "0.2s",
-                  "&:hover": {
-                    boxShadow: 8,
-                    transform: "translateY(-2px)",
-                  },
-                  bgcolor: theme === "dark" ? "#232946" : "#fff",
-                }}
-                onClick={() => navigate(`/dashboard/projects/${project._id}`)}
-              >
-                <CardContent>
-                  <Typography variant="h6" fontWeight={600} gutterBottom>
-                    {project.name}
-                  </Typography>
-                  <Typography
-                    variant="body2"
-                    color="text.secondary"
-                    sx={{ mb: 2, minHeight: "3em" }}
-                  >
-                    {project.description || "No description available."}
-                  </Typography>
-                  <Box display="flex" gap={1} flexWrap="wrap" mb={1}>
-                    <Chip
-                      label={project.status}
-                      size="small"
-                      color={
-                        project.status === "completed" ? "success" : "primary"
-                      }
-                    />
-                    <Chip
-                      label={`${project.members?.length || 0} members`}
-                      size="small"
-                      color="info"
-                    />
+        <Grid xs={12} lg={4}>
+          <Card sx={{ 
+            p: 3, 
+            borderRadius: '24px', 
+            bgcolor: theme === 'dark' ? 'rgba(30, 41, 59, 0.5)' : '#fff',
+            backdropFilter: 'blur(10px)',
+            border: '1px solid',
+            borderColor: theme === 'dark' ? 'rgba(255,255,255,0.05)' : '#e2e8f0',
+            height: '100%'
+          }}>
+            <Typography variant="h6" fontWeight={700} mb={3}>Recent Activity</Typography>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+              {notifications.slice(0, 4).length > 0 ? notifications.slice(0, 4).map((notif, idx) => (
+                <Box key={idx} sx={{ display: 'flex', gap: 2 }}>
+                  <Avatar sx={{ width: 36, height: 36, bgcolor: 'primary.light', color: 'primary.main' }}>
+                    <NotificationsIcon fontSize="small" />
+                  </Avatar>
+                  <Box>
+                    <Typography variant="body2" fontWeight={600}>{notif.title}</Typography>
+                    <Typography variant="caption" color="text.secondary" display="block">{notif.message}</Typography>
+                    <Typography variant="caption" sx={{ color: 'primary.main', opacity: 0.8 }}>{new Date(notif.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Typography>
                   </Box>
-                  <Button variant="outlined" size="small" sx={{ mt: 1 }}>
-                    View Details
-                  </Button>
-                </CardContent>
-              </Card>
-            </Grid>
-          ))
-        )}
+                </Box>
+              )) : (
+                <Box sx={{ textAlign: 'center', py: 4 }}>
+                   <Typography variant="body2" color="text.secondary">No recent activity</Typography>
+                </Box>
+              )}
+            </Box>
+            <Button fullWidth variant="text" size="small" sx={{ mt: 'auto', pt: 3 }} onClick={() => navigate('/dashboard/reports')}>View Full Report</Button>
+          </Card>
+        </Grid>
       </Grid>
 
-      {/* Modals */}
+      {/* Projects List */}
+      <Box mb={4}>
+        <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+           <Typography variant="h5" fontWeight={700}>My Projects</Typography>
+           <Button variant="text" sx={{ fontWeight: 600 }}>View All</Button>
+        </Box>
+        
+        <Grid container spacing={3}>
+          {projects.length === 0 ? (
+            <Grid xs={12}>
+              <Paper sx={{ p: 8, textAlign: 'center', borderRadius: '24px', border: '1px dashed #cbd5e1', bgcolor: 'transparent' }}>
+                 <Typography variant="h6" color="text.secondary">No projects yet</Typography>
+                 <Button variant="contained" sx={{ mt: 2, borderRadius: '12px' }} onClick={() => setJoinProjectModalOpen(true)}>Join your first project</Button>
+              </Paper>
+            </Grid>
+          ) : (
+            projects.map(project => (
+              <Grid xs={12} md={6} lg={4} key={project._id}>
+                <Card 
+                  onClick={() => navigate(`/dashboard/projects/${project._id}`)}
+                  sx={{ 
+                    borderRadius: '20px',
+                    border: '1px solid',
+                    borderColor: theme === 'dark' ? '#334155' : '#f1f5f9',
+                    bgcolor: theme === 'dark' ? '#1e293b' : '#fff',
+                    transition: 'all 0.3s',
+                    cursor: 'pointer',
+                    '&:hover': {
+                      transform: 'translateY(-4px)',
+                      boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)'
+                    }
+                  }}
+                >
+                  <CardContent sx={{ p: 3 }}>
+                    <Box display="flex" justifyContent="space-between" alignItems="start" mb={2}>
+                      <Typography variant="h6" fontWeight={700}>{project.name}</Typography>
+                      <Chip 
+                        label={project.status} 
+                        size="small" 
+                        sx={{ 
+                          borderRadius: '8px', 
+                          fontWeight: 600,
+                          bgcolor: project.status === 'completed' ? 'success.light' : 'primary.light',
+                          color: project.status === 'completed' ? 'success.dark' : 'primary.dark'
+                        }} 
+                      />
+                    </Box>
+                    <Typography variant="body2" color="text.secondary" sx={{ 
+                      mb: 3, 
+                      display: '-webkit-box', 
+                      WebkitLineClamp: 2, 
+                      WebkitBoxOrient: 'vertical', 
+                      overflow: 'hidden',
+                      minHeight: '40px'
+                    }}>
+                      {project.description || "Project collaboration and management."}
+                    </Typography>
+                    
+                    <Divider sx={{ mb: 2 }} />
+                    
+                    <Box display="flex" justifyContent="space-between" alignItems="center">
+                       <Box display="flex" alignItems="center" gap={1}>
+                          <GroupIcon fontSize="small" color="action" />
+                          <Typography variant="caption" fontWeight={600}>{project.members?.length || 0} Members</Typography>
+                       </Box>
+                       <Avatar sx={{ width: 24, height: 24, fontSize: '10px' }}>{project.createdBy?.name?.charAt(0)}</Avatar>
+                    </Box>
+                  </CardContent>
+                </Card>
+              </Grid>
+            ))
+          )}
+        </Grid>
+      </Box>
+
       <JoinProjectModal
         open={joinProjectModalOpen}
         onClose={() => setJoinProjectModalOpen(false)}
-        onJoinSuccess={handleJoinSuccess}
+        onJoinSuccess={fetchProjects}
       />
-
-      {/* Projects Overview Modal */}
-      <Dialog
-        open={projectsModalOpen}
-        onClose={() => setProjectsModalOpen(false)}
-        maxWidth="lg"
-        fullWidth
-      >
-        <DialogTitle>My Projects</DialogTitle>
-        <DialogContent>
-          {projects.length === 0 ? (
-            <Typography color="text.secondary" sx={{ mt: 2 }}>
-              No projects found. Join a project to get started!
-            </Typography>
-          ) : (
-            <Box sx={{ mt: 1 }}>
-              {projects.map((project) => (
-                <Paper
-                  key={project._id || project.id}
-                  sx={{ p: 2, mb: 2, borderRadius: 3, position: "relative" }}
-                >
-                  <Typography
-                    variant="h6"
-                    fontWeight={700}
-                    mb={0.5}
-                    sx={{ cursor: "pointer", textDecoration: "underline" }}
-                    onClick={() => {
-                      setProjectsModalOpen(false);
-                      navigate(
-                        `/dashboard/projects/${project._id || project.id}`
-                      );
-                    }}
-                  >
-                    {project.name}
-                  </Typography>
-                  <Typography color="text.secondary" mb={1}>
-                    {project.description || "No description."}
-                  </Typography>
-                  <Box display="flex" gap={2} alignItems="center">
-                    <Chip
-                      label={project.status || "active"}
-                      color={
-                        project.status === "completed"
-                          ? "success"
-                          : project.status === "archived"
-                          ? "default"
-                          : "primary"
-                      }
-                      size="small"
-                    />
-                    <Typography variant="caption" color="text.secondary">
-                      Created:{" "}
-                      {project.createdAt
-                        ? new Date(project.createdAt).toLocaleDateString()
-                        : "N/A"}
-                    </Typography>
-                  </Box>
-                </Paper>
-              ))}
-            </Box>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setProjectsModalOpen(false)}>Close</Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Tasks Modal */}
-      <Dialog
-        open={tasksModalOpen}
-        onClose={() => setTasksModalOpen(false)}
-        maxWidth="lg"
-        fullWidth
-      >
-        <DialogTitle>My Tasks</DialogTitle>
-        <DialogContent>
-          <Typography variant="body1" color="text.secondary">
-            Task management functionality will be available in the project view.
-            Please navigate to a specific project to manage your tasks.
-          </Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setTasksModalOpen(false)}>Close</Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Progress Modal */}
-      <Dialog
-        open={progressModalOpen}
-        onClose={() => setProgressModalOpen(false)}
-        maxWidth="lg"
-        fullWidth
-      >
-        <DialogTitle>My Progress</DialogTitle>
-        <DialogContent>
-          <Typography variant="body1" color="text.secondary">
-            Progress tracking is available within individual projects. Please
-            navigate to a specific project to view your progress.
-          </Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setProgressModalOpen(false)}>Close</Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Meetings Modal */}
-      <Dialog
-        open={meetingsModalOpen}
-        onClose={() => setMeetingsModalOpen(false)}
-        maxWidth="lg"
-        fullWidth
-      >
-        <DialogTitle>Meetings</DialogTitle>
-        <DialogContent>
-          <Typography variant="body1" color="text.secondary">
-            Meeting management is available within individual projects. Please
-            navigate to a specific project to view and join meetings.
-          </Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setMeetingsModalOpen(false)}>Close</Button>
-        </DialogActions>
-      </Dialog>
     </Box>
   );
 }
@@ -709,7 +432,7 @@ function CreateProjectModal({ open, onClose, onCreate, user }) {
     setError("");
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch("http://localhost:5000/api/projects", {
+      const res = await fetch(`${API_BASE}/projects`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -787,7 +510,7 @@ function ProjectDetailsModal({ open, onClose, projectId }) {
     setLoading(true);
     setError("");
     const token = localStorage.getItem("token");
-    fetch(`http://localhost:5000/api/projects/${projectId}`, {
+    fetch(`${API_BASE}/projects/${projectId}`, {
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${token}`,
@@ -947,59 +670,51 @@ function AdminDashboardContent({
   projects,
   meetings,
   notifications,
+  analytics,
   user,
   theme,
   onProjectCreated,
   fetchProjects,
 }) {
   const [modalOpen, setModalOpen] = useState(false);
-  const [projectsModalOpen, setProjectsModalOpen] = useState(false);
   const [joinRequestsModalOpen, setJoinRequestsModalOpen] = useState(false);
-  const [selectedProject, setSelectedProject] = useState(null);
   const [joinRequests, setJoinRequests] = useState([]);
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   const [snackbarMsg, setSnackbarMsg] = useState("");
   const [snackbarSeverity, setSnackbarSeverity] = useState("success");
   const navigate = useNavigate();
 
-  // Calculate metrics
-  const ongoingProjectsCount = projects.filter(
-    (p) => p.status === "active"
-  ).length;
-  const completedProjectsCount = projects.filter(
-    (p) => p.status === "completed"
-  ).length;
+  // Metrics
+  const activeProjectsCount = projects.filter(p => p.status !== 'completed').length;
+  const completedProjectsCount = projects.filter(p => p.status === 'completed').length;
 
   const fetchJoinRequests = async () => {
     const token = localStorage.getItem("token");
     try {
-      const res = await fetch(
-        "http://localhost:5000/api/projects/join-requests",
-        {
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+      const res = await fetch(`${API_BASE}/projects/join-requests`, {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      });
       if (res.ok) {
         const data = await res.json();
         setJoinRequests(data);
-      } else if (res.status === 403) {
-        setJoinRequests([]);
-      } else {
-        console.error("Error fetching join requests:", res.status);
       }
     } catch (error) {
       console.error("Error fetching join requests:", error);
     }
   };
 
+  useEffect(() => {
+    fetchJoinRequests();
+  }, []);
+
   const handleJoinRequestAction = async (projectId, userId, action) => {
     const token = localStorage.getItem("token");
     try {
       const res = await fetch(
-        `http://localhost:5000/api/projects/join-request/${projectId}/${userId}`,
+        `${API_BASE}/projects/join-request/${projectId}/${userId}`,
         {
           method: "PATCH",
           headers: {
@@ -1009,18 +724,13 @@ function AdminDashboardContent({
           body: JSON.stringify({ status: action }),
         }
       );
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.message || "Failed to update join request status");
-      }
+      if (!res.ok) throw new Error("Failed to update status");
 
-      setSnackbarMsg(`Join request ${action} successfully!`);
+      setSnackbarMsg(`Request ${action} successfully`);
       setSnackbarSeverity("success");
       setSnackbarOpen(true);
-
-      setJoinRequestsModalOpen(false);
-      await fetchJoinRequests();
-      if (fetchProjects) await fetchProjects();
+      fetchJoinRequests();
+      fetchProjects();
     } catch (err) {
       setSnackbarMsg(err.message);
       setSnackbarSeverity("error");
@@ -1028,756 +738,319 @@ function AdminDashboardContent({
     }
   };
 
-  useEffect(() => {
-    fetchJoinRequests();
-  }, []);
-
-  const onViewJoinRequests = (project) => {
-    setSelectedProject(project);
-    setJoinRequestsModalOpen(true);
-  };
-
-  const totalPendingRequests = joinRequests.length;
-
   return (
-    <Box
-      sx={{
-        maxWidth: 1200,
-        mx: "auto",
-        p: { xs: 2, md: 4 },
-        bgcolor: theme === "dark" ? "#181823" : "#f7f9fb",
-        minHeight: "100vh",
-      }}
-    >
-      {/* Welcome Message */}
-      <Box
-        sx={{
-          mb: 4,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-        }}
-      >
-        <Typography
-          variant="h4"
-          fontWeight={700}
-          sx={{
-            color: theme === "dark" ? "#fff" : "#333",
-            textAlign: { xs: "center", md: "left" },
+    <Box>
+       <Box mb={6} display="flex" justifyContent="space-between" alignItems="center">
+        <Box>
+          <Typography variant="h3" sx={{ fontWeight: 800, mb: 1, color: theme === 'dark' ? '#fff' : '#0f172a' }}>
+            Admin Panel
+          </Typography>
+          <Typography variant="h6" color="text.secondary" sx={{ opacity: 0.8 }}>
+            Manage projects, teams and track overall progress.
+          </Typography>
+        </Box>
+        <Button 
+          variant="contained" 
+          startIcon={<AddIcon />}
+          onClick={() => setModalOpen(true)}
+          sx={{ 
+            borderRadius: '12px', 
+            px: 3, 
+            py: 1.5,
+            fontWeight: 700,
+            boxShadow: '0 10px 15px -3px rgba(99, 102, 241, 0.4)'
           }}
         >
-          Welcome back, {user?.name || "Admin"}!
-        </Typography>
-        {totalPendingRequests > 0 && (
-          <Chip
-            label={`${totalPendingRequests} Pending Join Request${
-              totalPendingRequests > 1 ? "s" : ""
-            }`}
-            color="warning"
-            variant="filled"
-            sx={{ fontSize: "14px", fontWeight: "bold" }}
-          />
-        )}
+          New Project
+        </Button>
       </Box>
 
-      {/* Metrics Overview Section - 3 Cards */}
-      <Grid container spacing={3} sx={{ mb: 4 }}>
-        {/* Ongoing Projects Card */}
-        <Grid item xs={12} md={4}>
-          <Paper
-            elevation={3}
-            sx={{
-              p: 4,
-              borderRadius: 3,
-              textAlign: "center",
-              bgcolor: theme === "dark" ? "#232946" : "#fff",
-              border: `1px solid ${theme === "dark" ? "#444" : "#e0e0e0"}`,
-              height: "200px",
-              display: "flex",
-              flexDirection: "column",
-              justifyContent: "space-between",
-            }}
-          >
-            <Box sx={{ textAlign: "left" }}>
-              <TrendingUpIcon
-                sx={{ fontSize: 32, color: "primary.main", mb: 2 }}
-              />
-            </Box>
-            <Box>
-              <Typography
-                variant="h2"
-                fontWeight={700}
-                color="primary"
-                sx={{ mb: 1 }}
-              >
-                {ongoingProjectsCount}
-              </Typography>
-              <Typography variant="h6" fontWeight={600} gutterBottom>
-                Total Ongoing Projects
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                Across all teams
-              </Typography>
-            </Box>
-          </Paper>
+      {/* Admin Metrics */}
+      <Grid container spacing={3} mb={6}>
+        <Grid xs={12} md={4}>
+           <Card sx={{ 
+            p: 3, 
+            height: '100%',
+            borderRadius: '24px', 
+            bgcolor: theme === 'dark' ? '#1e293b' : '#fff',
+            border: '1px solid',
+            borderColor: theme === 'dark' ? '#334155' : '#e2e8f0',
+            boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)',
+            position: 'relative',
+            overflow: 'hidden'
+          }}>
+             <Box sx={{ position: 'absolute', top: -20, right: -20, opacity: 0.1 }}>
+                <FolderIcon sx={{ fontSize: 120, color: 'primary.main' }} />
+             </Box>
+             <Typography variant="overline" fontWeight={700} color="primary">Total Ongoing</Typography>
+             <Typography variant="h2" fontWeight={800} sx={{ my: 1 }}>{activeProjectsCount}</Typography>
+             <Typography variant="body2" color="text.secondary">Projects currently in development</Typography>
+          </Card>
         </Grid>
-
-        {/* Completed Projects Card */}
-        <Grid item xs={12} md={4}>
-          <Paper
-            elevation={3}
-            sx={{
-              p: 4,
-              borderRadius: 3,
-              textAlign: "center",
-              bgcolor: theme === "dark" ? "#232946" : "#fff",
-              border: `1px solid ${theme === "dark" ? "#444" : "#e0e0e0"}`,
-              height: "200px",
-              display: "flex",
-              flexDirection: "column",
-              justifyContent: "space-between",
-            }}
-          >
-            <Box sx={{ textAlign: "left" }}>
-              <CheckCircleIcon
-                sx={{ fontSize: 32, color: "success.main", mb: 2 }}
-              />
-            </Box>
-            <Box>
-              <Typography
-                variant="h2"
-                fontWeight={700}
-                color="success.main"
-                sx={{ mb: 1 }}
-              >
-                {completedProjectsCount}
-              </Typography>
-              <Typography variant="h6" fontWeight={600} gutterBottom>
-                Total Completed Projects
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                Successfully delivered
-              </Typography>
-            </Box>
-          </Paper>
+        <Grid xs={12} md={4}>
+           <Card sx={{ 
+            p: 3, 
+            height: '100%',
+            borderRadius: '24px', 
+            bgcolor: theme === 'dark' ? '#1e293b' : '#fff',
+            border: '1px solid',
+            borderColor: theme === 'dark' ? '#334155' : '#e2e8f0',
+            boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)',
+            position: 'relative',
+            overflow: 'hidden'
+          }}>
+             <Box sx={{ position: 'absolute', top: -20, right: -20, opacity: 0.1 }}>
+                <CheckCircleIcon sx={{ fontSize: 120, color: 'success.main' }} />
+             </Box>
+             <Typography variant="overline" fontWeight={700} color="success.main">Completed</Typography>
+             <Typography variant="h2" fontWeight={800} sx={{ my: 1 }}>{completedProjectsCount}</Typography>
+             <Typography variant="body2" color="text.secondary">Successfully delivered projects</Typography>
+          </Card>
         </Grid>
-
-        {/* Schedule Meeting Card */}
-        <Grid item xs={12} md={4}>
-          <Paper
-            elevation={3}
-            sx={{
-              p: 4,
-              borderRadius: 3,
-              textAlign: "center",
-              bgcolor: theme === "dark" ? "#232946" : "#fff",
-              border: `1px solid ${theme === "dark" ? "#444" : "#e0e0e0"}`,
-              height: "200px",
-              display: "flex",
-              flexDirection: "column",
-              justifyContent: "space-between",
-            }}
-          >
-            <Box sx={{ textAlign: "left" }}>
-              <VideoCallIcon sx={{ fontSize: 32, color: "info.main", mb: 2 }} />
+        <Grid xs={12} md={4}>
+           <Card sx={{ 
+            p: 3, 
+            height: '100%',
+            borderRadius: '24px', 
+            bgcolor: theme === 'dark' ? '#1e293b' : '#fff',
+            border: '1px solid',
+            borderColor: theme === 'dark' ? '#334155' : '#e2e8f0',
+            boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)',
+            position: 'relative',
+            overflow: 'hidden'
+          }}>
+             <Box sx={{ position: 'absolute', top: -20, right: -20, opacity: 0.1 }}>
+                <GroupIcon sx={{ fontSize: 120, color: 'warning.main' }} />
+             </Box>
+             <Typography variant="overline" fontWeight={700} color="warning.main">Join Requests</Typography>
+             <Typography variant="h2" fontWeight={800} sx={{ my: 1 }}>{joinRequests.length}</Typography>
+             <Button size="small" variant="outlined" color="warning" sx={{ borderRadius: '8px', mt: 1 }} onClick={() => setJoinRequestsModalOpen(true)}>Review Requests</Button>
+          </Card>
+        </Grid>
+      </Grid>
+      
+      {/* Analytics Section for Admin */}
+      <Grid container spacing={3} mb={6}>
+        <Grid xs={12} className="dashboard-performance">
+          <Card sx={{ 
+            p: 3, 
+            borderRadius: '24px', 
+            bgcolor: theme === 'dark' ? 'rgba(30, 41, 59, 0.5)' : '#fff',
+            backdropFilter: 'blur(10px)',
+            border: '1px solid',
+            borderColor: theme === 'dark' ? 'rgba(255,255,255,0.05)' : '#e2e8f0',
+          }}>
+            <Box display="flex" justifyContent="space-between" alignItems="center" mb={4}>
+              <Box>
+                <Typography variant="h6" fontWeight={700}>Platform Growth</Typography>
+                <Typography variant="body2" color="text.secondary">Weekly project completion rate</Typography>
+              </Box>
+              <TrendingUpIcon color="primary" />
             </Box>
-            <Box>
-              <Typography variant="h6" fontWeight={600} gutterBottom>
-                Schedule a Meeting
-              </Typography>
-              <Button
-                variant="contained"
-                color="primary"
-                sx={{
-                  mb: 2,
-                  borderRadius: 2,
-                  textTransform: "none",
-                  fontWeight: 600,
-                }}
-                onClick={() => navigate("/dashboard/meetings")}
-              >
-                + New Meeting
-              </Button>
-              <Typography variant="body2" color="text.secondary">
-                Schedule team meetings
-              </Typography>
+            <Box sx={{ height: 300, width: '100%', minHeight: 300 }}>
+              <ResponsiveContainer width="100%" height={300}>
+                <AreaChart
+                  data={analytics?.weeklyCompletion || []}
+                  margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
+                >
+                  <defs>
+                    <linearGradient id="colorAdminComp" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3}/>
+                      <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <XAxis dataKey="name" stroke={theme === 'dark' ? '#475569' : '#94a3b8'} fontSize={12} />
+                  <YAxis hide />
+                  <ChartTooltip 
+                    contentStyle={{ 
+                      backgroundColor: theme === 'dark' ? '#1e293b' : '#fff',
+                      borderColor: theme === 'dark' ? '#334155' : '#e2e8f0',
+                      borderRadius: '8px'
+                    }} 
+                  />
+                  <Area type="monotone" dataKey="completion" stroke="#6366f1" fillOpacity={1} fill="url(#colorAdminComp)" strokeWidth={3} />
+                </AreaChart>
+              </ResponsiveContainer>
             </Box>
-          </Paper>
+          </Card>
         </Grid>
       </Grid>
 
-      {/* Admin Actions Section */}
-      <Typography
-        variant="h5"
-        fontWeight={700}
-        sx={{
-          mb: 3,
-          color: theme === "dark" ? "#fff" : "#333",
-          display: "flex",
-          alignItems: "center",
-          gap: 1,
-        }}
-      >
-        <DashboardIcon color="primary" />
-        Admin Actions
-      </Typography>
-
-      {/* 5 Action Buttons */}
-      <Grid container spacing={2} sx={{ mb: 4 }}>
-        <Grid item xs={12} sm={6} md={2.4}>
-          <Button
-            variant="contained"
-            color="primary"
-            fullWidth
-            sx={{
-              p: 3,
-              borderRadius: 2,
-              fontSize: "1rem",
-              fontWeight: 600,
-              textTransform: "none",
-              height: "80px",
-              display: "flex",
-              flexDirection: "column",
-              gap: 1,
-            }}
-            onClick={() => setModalOpen(true)}
-          >
-            <AddIcon sx={{ fontSize: 24 }} />
-            Create Project
-          </Button>
-        </Grid>
-
-        <Grid item xs={12} sm={6} md={2.4}>
-          <Button
-            variant="contained"
-            color="secondary"
-            fullWidth
-            sx={{
-              p: 3,
-              borderRadius: 2,
-              fontSize: "1rem",
-              fontWeight: 600,
-              textTransform: "none",
-              height: "80px",
-              display: "flex",
-              flexDirection: "column",
-              gap: 1,
-            }}
-            onClick={() => setProjectsModalOpen(true)}
-          >
-            <FolderIcon sx={{ fontSize: 24 }} />
-            View Projects
-          </Button>
-        </Grid>
-
-        <Grid item xs={12} sm={6} md={2.4}>
-          <Button
-            variant="contained"
-            color="success"
-            fullWidth
-            sx={{
-              p: 3,
-              borderRadius: 2,
-              fontSize: "1rem",
-              fontWeight: 600,
-              textTransform: "none",
-              height: "80px",
-              display: "flex",
-              flexDirection: "column",
-              gap: 1,
-            }}
-            onClick={() => setJoinRequestsModalOpen(true)}
-          >
-            <GroupIcon sx={{ fontSize: 24 }} />
-            Manage Teams
-          </Button>
-        </Grid>
-
-        <Grid item xs={12} sm={6} md={2.4}>
-          <Button
-            variant="contained"
-            color="warning"
-            fullWidth
-            sx={{
-              p: 3,
-              borderRadius: 2,
-              fontSize: "1rem",
-              fontWeight: 600,
-              textTransform: "none",
-              height: "80px",
-              display: "flex",
-              flexDirection: "column",
-              gap: 1,
-            }}
-            onClick={() => navigate("/dashboard/reports")}
-          >
-            <AssessmentIcon sx={{ fontSize: 24 }} />
-            View Reports
-          </Button>
-        </Grid>
-
-        <Grid item xs={12} sm={6} md={2.4}>
-          <Button
-            variant="contained"
-            color="info"
-            fullWidth
-            sx={{
-              p: 3,
-              borderRadius: 2,
-              fontSize: "1rem",
-              fontWeight: 600,
-              textTransform: "none",
-              height: "80px",
-              display: "flex",
-              flexDirection: "column",
-              gap: 1,
-            }}
-            onClick={() => navigate("/dashboard/meetings")}
-          >
-            <VideoCallIcon sx={{ fontSize: 24 }} />
-            Schedule Meeting
-          </Button>
-        </Grid>
-      </Grid>
-
-      {/* Modals */}
-      <CreateProjectModal
-        open={modalOpen}
-        onClose={() => setModalOpen(false)}
-        onCreate={onProjectCreated}
-        user={user}
-      />
-      <CurrentProjectsModal
-        open={projectsModalOpen}
-        onClose={() => setProjectsModalOpen(false)}
-        projects={projects}
-        onViewJoinRequests={onViewJoinRequests}
-      />
-
-      {/* Join Requests Modal */}
-      <Dialog
-        open={joinRequestsModalOpen}
-        onClose={() => setJoinRequestsModalOpen(false)}
-        maxWidth="md"
-        fullWidth
-      >
-        <DialogTitle>Join Requests for {selectedProject?.name}</DialogTitle>
-        <DialogContent>
-          {!selectedProject?.joinRequests ||
-          selectedProject.joinRequests.filter((req) => req.status === "pending")
-            .length === 0 ? (
-            <Typography color="text.secondary">
-              No pending join requests for this project.
-            </Typography>
+      {/* Projects Grid for Admin */}
+      <Box mb={4}>
+        <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+           <Typography variant="h5" fontWeight={700}>Project Management</Typography>
+        </Box>
+        
+        <Grid container spacing={3}>
+          {projects.length === 0 ? (
+            <Grid xs={12}>
+              <Paper sx={{ p: 8, textAlign: 'center', borderRadius: '24px', border: '1px dashed #cbd5e1', bgcolor: 'transparent' }}>
+                 <Typography variant="h6" color="text.secondary">No projects yet</Typography>
+                 <Button variant="contained" sx={{ mt: 2, borderRadius: '12px' }} onClick={() => setModalOpen(true)}>Create your first project</Button>
+              </Paper>
+            </Grid>
           ) : (
-            selectedProject.joinRequests
-              .filter((req) => req.status === "pending")
-              .map((req) => (
-                <Paper key={req._id} sx={{ p: 2, mb: 1, borderRadius: 2 }}>
-                  <Box
-                    display="flex"
-                    alignItems="center"
-                    justifyContent="space-between"
-                  >
-                    <Box>
-                      <Typography fontWeight={600}>
-                        {req.user && req.user.name
-                          ? req.user.name
-                          : "Unknown User"}
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        {req.user && req.user.email
-                          ? req.user.email
-                          : "No email"}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        Requested on:{" "}
-                        {new Date(req.requestedAt).toLocaleDateString()}
-                      </Typography>
+            projects.map(project => (
+              <Grid xs={12} md={6} lg={4} key={project._id}>
+                <Card 
+                  onClick={() => navigate(`/dashboard/projects/${project._id}`)}
+                  sx={{ 
+                    borderRadius: '20px',
+                    border: '1px solid',
+                    borderColor: theme === 'dark' ? '#334155' : '#f1f5f9',
+                    bgcolor: theme === 'dark' ? '#1e293b' : '#fff',
+                    transition: 'all 0.3s',
+                    cursor: 'pointer',
+                    '&:hover': {
+                      transform: 'translateY(-4px)',
+                      boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)'
+                    }
+                  }}
+                >
+                  <CardContent sx={{ p: 3 }}>
+                    <Box display="flex" justifyContent="space-between" alignItems="start" mb={2}>
+                      <Typography variant="h6" fontWeight={700}>{project.name}</Typography>
+                      <Chip 
+                        label={project.status} 
+                        size="small" 
+                        sx={{ 
+                          borderRadius: '8px', 
+                          fontWeight: 600,
+                          bgcolor: project.status === 'completed' ? 'success.light' : 'primary.light',
+                          color: project.status === 'completed' ? 'success.dark' : 'primary.dark'
+                        }} 
+                      />
                     </Box>
-                    <Box display="flex" gap={1}>
-                      <Button
-                        size="small"
-                        color="success"
-                        variant="contained"
-                        onClick={() =>
-                          handleJoinRequestAction(
-                            selectedProject._id,
-                            req.user._id || req.user,
-                            "approved"
-                          )
-                        }
-                      >
-                        Approve
-                      </Button>
-                      <Button
-                        size="small"
-                        color="error"
-                        variant="outlined"
-                        onClick={() =>
-                          handleJoinRequestAction(
-                            selectedProject._id,
-                            req.user._id || req.user,
-                            "rejected"
-                          )
-                        }
-                      >
-                        Reject
-                      </Button>
+                    <Typography variant="body2" color="text.secondary" sx={{ 
+                      mb: 3, 
+                      display: '-webkit-box', 
+                      WebkitLineClamp: 2, 
+                      WebkitBoxOrient: 'vertical', 
+                      overflow: 'hidden',
+                      minHeight: '40px'
+                    }}>
+                      {project.description || "Project collaboration and management."}
+                    </Typography>
+                    
+                    <Divider sx={{ mb: 2 }} />
+                    
+                    <Box display="flex" justifyContent="space-between" alignItems="center">
+                       <Box display="flex" alignItems="center" gap={1}>
+                          <GroupIcon fontSize="small" color="action" />
+                          <Typography variant="caption" fontWeight={600}>{project.members?.length || 0} Team Members</Typography>
+                       </Box>
+                       <Avatar sx={{ width: 24, height: 24, fontSize: '10px' }}>{project.name?.charAt(0)}</Avatar>
                     </Box>
-                  </Box>
+                  </CardContent>
+                </Card>
+              </Grid>
+            ))
+          )}
+        </Grid>
+      </Box>
+
+      {/* Modals restored with premium styling */}
+      <CreateProjectModal open={modalOpen} onClose={() => setModalOpen(false)} onCreate={onProjectCreated} user={user} />
+      
+      <Dialog open={joinRequestsModalOpen} onClose={() => setJoinRequestsModalOpen(false)} maxWidth="sm" fullWidth>
+         <DialogTitle sx={{ fontWeight: 800 }}>Team Join Requests</DialogTitle>
+         <DialogContent>
+            {joinRequests.length === 0 ? (
+              <Typography color="text.secondary" p={2}>No pending requests.</Typography>
+            ) : (
+              joinRequests.map(req => (
+                <Paper key={req._id} sx={{ p: 2, mb: 1, borderRadius: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                   <Box>
+                      <Typography fontWeight={700}>{req.user?.name}</Typography>
+                      <Typography variant="caption" color="text.secondary">Project: {req.project?.name || "Shared Project"}</Typography>
+                   </Box>
+                   <Box display="flex" gap={1}>
+                      <Button size="small" variant="contained" color="success" onClick={() => handleJoinRequestAction(req.project?._id || req.projectId, req.user?._id || req.userId, 'approved')}>Approve</Button>
+                      <Button size="small" variant="outlined" color="error" onClick={() => handleJoinRequestAction(req.project?._id || req.projectId, req.user?._id || req.userId, 'rejected')}>Deny</Button>
+                   </Box>
                 </Paper>
               ))
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setJoinRequestsModalOpen(false)}>Close</Button>
-        </DialogActions>
+            )}
+         </DialogContent>
+         <DialogActions><Button onClick={() => setJoinRequestsModalOpen(false)}>Close</Button></DialogActions>
       </Dialog>
 
-      {/* Snackbar */}
-      <Snackbar
-        open={snackbarOpen}
-        autoHideDuration={4000}
-        onClose={() => setSnackbarOpen(false)}
-      >
-        <MuiAlert
-          elevation={6}
-          variant="filled"
-          onClose={() => setSnackbarOpen(false)}
-          severity={snackbarSeverity}
-        >
-          {snackbarMsg}
-        </MuiAlert>
+      <Snackbar open={snackbarOpen} autoHideDuration={4000} onClose={() => setSnackbarOpen(false)}>
+        <MuiAlert severity={snackbarSeverity} variant="filled">{snackbarMsg}</MuiAlert>
       </Snackbar>
     </Box>
   );
 }
 
 const TeamSyncDashboard = () => {
-  const { user, role, setRole, logout } = useAuth();
-  const navigate = useNavigate();
-  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const { user, role } = useAuth();
   const [projects, setProjects] = useState([]);
   const [meetings, setMeetings] = useState([]);
   const [notifications, setNotifications] = useState([]);
-  const { theme, toggleTheme } = useTheme();
-  const [snackbar, setSnackbar] = useState({
-    open: false,
-    message: "",
-    severity: "success",
-  });
-  const [notificationCenterOpen, setNotificationCenterOpen] = useState(false);
-  const [unreadNotifications, setUnreadNotifications] = useState(0);
+  const [analytics, setAnalytics] = useState(null);
+  const { theme } = useTheme();
 
   const fetchProjects = async () => {
     const token = localStorage.getItem("token");
-    let url = "";
-    if (role === "admin") {
-      url = "http://localhost:5000/api/projects/mine";
-    } else {
-      url = "http://localhost:5000/api/projects/member-projects";
-    }
+    const url = role === "admin" ? `${API_BASE}/projects/mine` : `${API_BASE}/projects/member-projects`;
     try {
-      const res = await fetch(url, {
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setProjects(data);
-      } else {
-        console.error("Failed to fetch projects:", res.status);
-      }
-    } catch (error) {
-      console.error("Error fetching projects:", error);
-    }
-  };
-
-  const fetchUnreadNotifications = async () => {
-    try {
-      const token = localStorage.getItem("token");
-      const response = await fetch(
-        "http://localhost:5000/api/notifications/unread-count",
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
-      if (response.ok) {
-        const data = await response.json();
-        setUnreadNotifications(data.count);
-      }
-    } catch (err) {
-      console.error("Failed to fetch unread notifications:", err);
-    }
+      const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+      if (res.ok) setProjects(await res.json());
+    } catch (error) { console.error(error); }
   };
 
   const fetchNotifications = async () => {
     try {
       const token = localStorage.getItem("token");
-      const response = await fetch("http://localhost:5000/api/notifications", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setNotifications(data.notifications || []);
-      }
-    } catch (err) {
-      console.error("Failed to fetch notifications:", err);
-    }
+      const res = await fetch(`${API_BASE}/notifications`, { headers: { Authorization: `Bearer ${token}` } });
+      if (res.ok) setNotifications((await res.json()).notifications || []);
+    } catch (err) { console.error(err); }
+  };
+
+  const fetchAnalytics = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API_BASE}/projects/stats/dashboard`, { headers: { Authorization: `Bearer ${token}` } });
+      if (res.ok) setAnalytics(await res.json());
+    } catch (err) { console.error(err); }
   };
 
   useEffect(() => {
-    fetchProjects();
-    fetchUnreadNotifications();
-    fetchNotifications();
-  }, []);
+    if (role) {
+      fetchProjects();
+      fetchNotifications();
+      fetchAnalytics();
+    }
+  }, [role]);
 
   return (
-    <div
-      style={{
-        fontFamily: "Arial, sans-serif",
-        backgroundColor: theme === "dark" ? "#181823" : "#f5f5f5",
-        width: "100vw",
-        height: "100vh",
-        overflow: "hidden",
-        margin: 0,
-        padding: 0,
-      }}
-    >
-      {/* Top Navigation Bar */}
-      <nav
-        style={{
-          backgroundColor: "#1976d2",
-          padding: "0 20px",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          height: "64px",
-          boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
-          color: "white",
-          width: "98vw",
-          position: "fixed",
-          top: 0,
-          left: 0,
-          zIndex: 100,
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center" }}>
-          <button
-            style={{
-              background: "none",
-              border: "none",
-              color: "white",
-              fontSize: "24px",
-              cursor: "pointer",
-              marginRight: "20px",
-            }}
-          >
-            ☰
-          </button>
-          <h1 style={{ margin: 0, fontSize: "24px", fontWeight: "bold" }}>
-            TeamSync
-          </h1>
-        </div>
-        <Box display="flex" alignItems="center" gap={2}>
-          <Typography
-            variant="h4"
-            sx={{ color: theme === "dark" ? "#fff" : "#333" }}
-          >
-            Dashboard
-          </Typography>
-          <Badge badgeContent={unreadNotifications} color="error">
-            <IconButton
-              onClick={() => setNotificationCenterOpen(true)}
-              sx={{
-                bgcolor: theme === "dark" ? "#1976d2" : "#1976d2",
-                color: "white",
-                "&:hover": {
-                  bgcolor: theme === "dark" ? "#1565c0" : "#1565c0",
-                },
-              }}
-            >
-              <NotificationsIcon />
-            </IconButton>
-          </Badge>
-        </Box>
-        <div style={{ display: "flex", alignItems: "center", gap: "15px" }}>
-          {/* Theme Switcher */}
-          <button
-            onClick={toggleTheme}
-            style={{
-              background: "none",
-              border: "none",
-              color: "white",
-              fontSize: "1.7rem",
-              cursor: "pointer",
-              marginRight: "8px",
-            }}
-            title="Toggle theme"
-          >
-            {theme === "dark" ? "🌞" : "🌙"}
-          </button>
-
-          {/* Profile Menu */}
-          <div style={{ position: "relative" }}>
-            <button
-              onClick={() => setProfileMenuOpen(!profileMenuOpen)}
-              style={{
-                background: "#ff9800",
-                border: "none",
-                color: "white",
-                fontSize: "16px",
-                cursor: "pointer",
-                width: "40px",
-                height: "40px",
-                borderRadius: "50%",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              {role === "admin" ? "A" : "M"}
-            </button>
-            {profileMenuOpen && (
-              <div
-                style={{
-                  position: "absolute",
-                  top: "100%",
-                  right: 0,
-                  backgroundColor: theme === "white" ? "white" : "#181823",
-                  border: "1px solid #ddd",
-                  borderRadius: "8px",
-                  boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
-                  width: "200px",
-                  zIndex: 1000,
-                  color: "#333",
-                }}
-              >
-                <button
-                  style={{
-                    width: "100%",
-                    padding: "12px 16px",
-                    border: "none",
-                    background: "none",
-                    color: "white",
-                    textAlign: "left",
-                    cursor: "pointer",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "10px",
-                  }}
-                  onClick={() => navigate("/profile")}
-                >
-                  👤 Profile
-                </button>
-                <button
-                  style={{
-                    width: "100%",
-                    padding: "12px 16px",
-                    border: "none",
-                    background: "none",
-                    textAlign: "left",
-                    cursor: "pointer",
-                    display: "flex",
-                    alignItems: "center",
-                    color: "white",
-                    gap: "10px",
-                  }}
-                  onClick={() => navigate("/settings")}
-                >
-                  ⚙️ Settings
-                </button>
-                <hr
-                  style={{
-                    margin: "8px 0",
-                    border: "none",
-                    borderTop: "1px solid #eee",
-                  }}
-                />
-                <button
-                  style={{
-                    width: "100%",
-                    padding: "12px 16px",
-                    border: "none",
-                    background: "none",
-                    textAlign: "left",
-                    cursor: "pointer",
-                    display: "flex",
-                    color: "white",
-                    alignItems: "center",
-                    gap: "10px",
-                  }}
-                  onClick={() => {
-                    logout();
-                    navigate("/login");
-                  }}
-                >
-                  🚪 Logout
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      </nav>
-      {/* Main Content */}
-      <div
-        style={{
-          width: "100vw",
-          height: "calc(100vh - 64px)",
-          marginTop: "64px",
-          overflowY: "auto",
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "flex-start",
-          boxSizing: "border-box",
-        }}
-      >
-        <div
-          style={{
-            maxWidth: "1200px",
-            width: "100%",
-            padding: "30px 20px",
-            boxSizing: "border-box",
-          }}
-        >
-          {role === "member" && (
-            <MemberDashboardContent
-              projects={projects}
-              meetings={meetings}
-              notifications={notifications}
-              user={user}
-              onJoinProject={fetchProjects}
-              fetchProjects={fetchProjects}
-            />
-          )}
-          {role === "admin" && (
-            <AdminDashboardContent
-              projects={projects}
-              meetings={meetings}
-              notifications={notifications}
-              user={user}
-              theme={theme}
-              onProjectCreated={(project) =>
-                setProjects((prev) => [project, ...prev])
-              }
-              fetchProjects={fetchProjects}
-            />
-          )}
-        </div>
-      </div>
-      <NotificationCenter
-        open={notificationCenterOpen}
-        onClose={() => setNotificationCenterOpen(false)}
-        notifications={notifications}
-        unreadNotifications={unreadNotifications}
-        setUnreadNotifications={setUnreadNotifications}
-      />
-      {/* Insights widgets removed as requested */}
-    </div>
+    <Box sx={{ flexGrow: 1 }}>
+      <Box sx={{ maxWidth: 1200, mx: 'auto' }}>
+        {role === 'member' ? (
+          <MemberDashboardContent
+            projects={projects}
+            meetings={meetings}
+            notifications={notifications}
+            analytics={analytics}
+            user={user}
+            onJoinProject={fetchProjects}
+            fetchProjects={fetchProjects}
+          />
+        ) : (
+          <AdminDashboardContent
+            projects={projects}
+            meetings={meetings}
+            notifications={notifications}
+            analytics={analytics}
+            user={user}
+            theme={theme}
+            onProjectCreated={() => { fetchProjects(); fetchAnalytics(); }}
+            fetchProjects={fetchProjects}
+          />
+        )}
+      </Box>
+    </Box>
   );
 };
 
