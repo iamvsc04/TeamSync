@@ -54,6 +54,7 @@ const corsOptions = {
     if (!origin) return callback(null, true);
     if (!origin) return callback(null, true);
     
+    let frontendUrl = process.env.FRONTEND_URL;
     const allowedOrigins = [
       'http://localhost:3000',
       'http://localhost:5173',
@@ -61,8 +62,23 @@ const corsOptions = {
       'http://127.0.0.1:3000',
       'http://127.0.0.1:5173',
       'http://127.0.0.1:5174',
-      process.env.FRONTEND_URL
-    ].filter(Boolean);
+    ];
+
+    if (frontendUrl) {
+      // Add raw URL
+      allowedOrigins.push(frontendUrl);
+      // Add https version if it doesn't have it
+      if (!frontendUrl.startsWith('http')) {
+        allowedOrigins.push(`https://${frontendUrl}`);
+        allowedOrigins.push(`http://${frontendUrl}`);
+      }
+      // Handle trailing slash
+      if (frontendUrl.endsWith('/')) {
+        allowedOrigins.push(frontendUrl.slice(0, -1));
+      } else {
+        allowedOrigins.push(`${frontendUrl}/`);
+      }
+    }
     
     if (allowedOrigins.includes(origin)) {
       callback(null, true);
